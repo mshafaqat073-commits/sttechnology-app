@@ -4,6 +4,11 @@
          iske bina internet access nahi milega. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- App update checker ke liye — khud APK download karke khud
+         install prompt kholne ki ijazat deta he (browser download
+         manager par depend nahi karna padta). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+
     <!-- Live QR Attendance scanner (mobile_scanner package) ke liye. -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
@@ -60,4 +65,3 @@
         </intent>
     </queries>
 </manifest>
-
