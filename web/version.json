@@ -1,13 +1,13 @@
 {
   "android": {
     "latest_version": "1.0.1",
-    "download_url": "https://github.com/<your-username>/<your-repo>/releases/download/v1.0.1/app-release.apk",
+    "download_url": "https://github.com/mshafaqat073-commits/sttechnology-app/releases/download/v1.0.1/app-release.apk",
     "notes": "Bug fixes aur performance improvements.",
     "force_update": false
   },
   "windows": {
     "latest_version": "1.0.1",
-    "download_url": "https://github.com/<your-username>/<your-repo>/releases/download/v1.0.1/STTechnology-Setup-1.0.1.exe",
+    "download_url": "https://github.com/mshafaqat073-commits/sttechnology-app/releases/download/v1.0.1/my_test_app.exe",
     "notes": "Bug fixes aur performance improvements.",
     "force_update": false
   }
