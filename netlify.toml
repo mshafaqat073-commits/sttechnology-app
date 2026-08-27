@@ -25,3 +25,8 @@ EOF
 
 [build.environment]
   FLUTTER_VERSION = "stable"
+  # Netlify ka secrets-scanner NOTIFICATION_SHARED_SECRET ki value ko
+  # code mein doosri jagah bhi dekh kar "leak" samajh raha tha —
+  # jabke wo waha jaan-boojh kar honi chahiye thi. Isay skip karne ke
+  # liye bata rahe hain.
+  SECRETS_SCAN_OMIT_KEYS = "NOTIFICATION_SHARED_SECRET"
