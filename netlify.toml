@@ -1,14 +1,27 @@
 ## netlify.toml
-## Ye file apne Flutter project ke ROOT folder mein rakho (jahan
-## pubspec.yaml hai) — Netlify ka default Linux build image mein
-## Flutter pehle se installed nahi hota, isliye build command khud
-## Flutter SDK download karke phir web build banata hai.
+## Project ke ROOT folder mein rakho (jahan pubspec.yaml he).
+##
+## Ye build command 3 kaam karta he:
+##   1. Flutter SDK download karta he (Netlify ke build image mein
+##      pehle se Flutter nahi hota).
+##   2. Netlify ke "Environment variables" (Site settings) se keys
+##      utha kar lib/secrets.dart KHUD BANATA HE — is file ko kabhi
+##      GitHub par rakhne ki zaroorat nahi.
+##   3. Phir normal 'flutter build web' chalata he.
 
 [build]
-  command = "git clone https://github.com/flutter/flutter.git --depth 1 -b stable _flutter && export PATH=\"$PATH:$(pwd)/_flutter/bin\" && flutter doctor && flutter pub get && flutter build web --release"
+  command = '''
+    git clone https://github.com/flutter/flutter.git --depth 1 -b stable _flutter && \
+    export PATH="$PATH:$(pwd)/_flutter/bin" && \
+    cat > lib/secrets.dart << EOF
+const String groqApiKey = "$GROQ_API_KEY";
+const String openRouterApiKey = "$OPENROUTER_API_KEY";
+const String notificationEndpoint = "$NOTIFICATION_ENDPOINT";
+const String notificationSharedSecret = "$NOTIFICATION_SHARED_SECRET";
+EOF
+    flutter doctor && flutter pub get && flutter build web --release
+  '''
   publish = "build/web"
 
 [build.environment]
-  # Agar Flutter ka koi specific stable version pin karna ho to yahan
-  # branch/tag change kar sakte ho (upar -b stable ki jagah).
   FLUTTER_VERSION = "stable"

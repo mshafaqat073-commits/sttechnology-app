@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'admission_page.dart';
 import 'login_page.dart';
 import 'class_selection_page.dart';
-import 'staffdashboard.dart';
+import 'StaffDashboard.dart';
 import 'fee_dashboard.dart';
 import 'ExpenseDashboard.dart';
 import 'settings_page.dart';
