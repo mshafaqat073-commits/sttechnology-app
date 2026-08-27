@@ -10,6 +10,7 @@ import 'role_selector_page.dart';
 import 'firebase_options.dart';
 import 'notification_service.dart';
 import 'school_context.dart';
+import 'app_update_checker.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -109,7 +110,7 @@ class MyApp extends StatelessWidget {
       // ParentLoginPage — login hone ke baad khud seedha sahi dashboard
       // par navigate kar deta hai, is liye yahan _RoleRouter/
       // authStateChanges ki zaroorat nahi rahi.)
-      home: const _SignOutThenRoleSelector(),
+      home: AppUpdateChecker(child: const _SignOutThenRoleSelector()),
     );
   }
 }
