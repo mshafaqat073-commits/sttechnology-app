@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "366712251908",
+    "project_id": "aepschoolsystem-59874",
+    "storage_bucket": "aepschoolsystem-59874.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:366712251908:android:d82eb4ef6103342ef83751",
+        "android_client_info": {
+          "package_name": "com.aepschoolsystem.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA0oW0ZNcBwBLv3FwL-H1IcyC-w0rXzNjE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:366712251908:android:093ed2d4d3ca26a8f83751",
+        "android_client_info": {
+          "package_name": "com.example.my_test_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA0oW0ZNcBwBLv3FwL-H1IcyC-w0rXzNjE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

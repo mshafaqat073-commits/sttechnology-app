@@ -1,0 +1,142 @@
+rules_version = '2';
+
+// ============================================================================
+// Multi-school isolation rules
+// ----------------------------------------------------------------------------
+// Har school ka data schools/{schoolId}/... ke andar hai. Teacher/Parent
+// login hone ke baad "setSchoolClaims" Cloud Function unke Firebase Auth
+// token par custom claims { schoolId, role } laga deti hai — yahan hum
+// bas itna check karte hain ke request bhejne wale ka schoolId claim,
+// document ke schoolId se match karta ho.
+//
+// Admin bhi ab Firebase Auth use karta hai (dekhein lib/login_page.dart aur
+// lib/admin_auth.dart) — uska account banate waqt hi (migrate_admin_to_auth.js)
+// { schoolId, role: 'admin' } custom claim laga di jaati hai, is liye
+// neeche wale generic rules Admin ko bhi normally allow kar dete hain,
+// alag se kuch nahi chahiye.
+//
+// Istisna: 'users' subcollection (jahan admin ka login record hota hai)
+// PUBLIC READ hai — dekhein neeche match /schools/{schoolId}/users/{id}.
+// Ye safe hai kyunke us doc mein ab koi secret nahi (password Firestore
+// mein store hi nahi hota) — login se pehle (user abhi sign-in nahi hua)
+// app ko username se uska internal authEmail dhoondna hota hai, taake
+// Firebase Auth ko sahi email di ja sake.
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function claims() {
+      return request.auth.token;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function belongsToSchool(schoolId) {
+      return isSignedIn() && claims().schoolId == schoolId;
+    }
+
+    function isAdminOfSchool(schoolId) {
+      return belongsToSchool(schoolId) && claims().role == 'admin';
+    }
+
+    function isStaffOfSchool(schoolId) {
+      return belongsToSchool(schoolId) && claims().role == 'teacher';
+    }
+
+    function isParentOfSchool(schoolId) {
+      return belongsToSchool(schoolId) && claims().role == 'parent';
+    }
+
+    match /schools/{schoolId} {
+      // School ki basic info sab logged-in members padh sakte hain.
+      allow read: if belongsToSchool(schoolId);
+      allow write: if isAdminOfSchool(schoolId);
+
+      // Admin login lookup: username -> authEmail. Ye query LOGIN SE PEHLE
+      // chalti hai (request.auth abhi null hota hai), is liye publicly
+      // readable rakhna zaroori hai. Koi secret field yahan nahi hoti —
+      // password Firebase Auth khud manage karta hai.
+      match /users/{userId} {
+        allow read: if true;
+        allow write: if isAdminOfSchool(schoolId);
+      }
+
+      // Pre-login branding lookup: schoolName/logoUrl. Login aur Role
+      // Selector screens ko koi user sign-in kiye bagair bhi is school ka
+      // naam/logo dikhana hota hai, is liye publicly readable rakha hai.
+      // Koi secret field yahan nahi hoti (sirf schoolName, address,
+      // logoUrl) — writes hamesha admin-only hi rehti hain (neeche wale
+      // generic collection rule se).
+      match /settings/{settingsId} {
+        allow read: if true;
+      }
+
+      // Har school ke andar baaqi collections (students, staff,
+      // fee_payments, attendance, results, waghera) — sab par same
+      // pattern: apni school ka data padh/likh sakte ho, doosri school ka
+      // bilkul nahi.
+      match /{collection}/{docId} {
+        allow read: if isAdminOfSchool(schoolId) ||
+                        isStaffOfSchool(schoolId) ||
+                        isParentOfSchool(schoolId);
+
+        // Likhne ki ijazat: Admin hamesha, Staff/Parent sirf apna record
+        // update kar sakein (jaise authUid/lastLoginAt/fcmToken link
+        // karna) — baaqi sab kuch Admin ke through hi hona chahiye.
+        allow write: if isAdminOfSchool(schoolId) ||
+                        ((isStaffOfSchool(schoolId) || isParentOfSchool(schoolId)) &&
+                         request.auth.uid == resource.data.authUid);
+
+        // Naya staff/student doc pehli dafa banane ke liye (admission,
+        // add_staff) — sirf Admin.
+        allow create: if isAdminOfSchool(schoolId);
+      }
+
+      // Complaints aur Leave Applications: Parent apni taraf se naya doc
+      // bana sakta he (studentId khud ke bachay ka hona chahiye — parent
+      // ka koi single authUid nahi hota is app mein, is liye sirf
+      // "parent role ho" itna hi check karte hain), lekin sirf Admin hi
+      // status/reply update kar sakta he.
+      match /complaints/{docId} {
+        allow read: if isAdminOfSchool(schoolId) || isParentOfSchool(schoolId);
+        allow create: if isParentOfSchool(schoolId);
+        allow update, delete: if isAdminOfSchool(schoolId);
+      }
+
+      match /leave_applications/{docId} {
+        allow read: if isAdminOfSchool(schoolId) || isParentOfSchool(schoolId);
+        allow create: if isParentOfSchool(schoolId);
+        allow update, delete: if isAdminOfSchool(schoolId);
+      }
+
+      // Online Classes: Teacher/Admin bana sakte hain, sab (parent bhi)
+      // dekh sakte hain.
+      match /online_classes/{docId} {
+        allow read: if isAdminOfSchool(schoolId) ||
+                        isStaffOfSchool(schoolId) ||
+                        isParentOfSchool(schoolId);
+        allow create, update, delete: if isAdminOfSchool(schoolId) ||
+                        isStaffOfSchool(schoolId);
+      }
+
+      // Live QR Attendance: Teacher/Admin scan karke naya attendance doc
+      // bana sakte hain (generic rule sirf Admin ko create allow karti
+      // he, is liye Staff ke liye yahan explicitly allow kar rahe hain).
+      match /attendance/{docId} {
+        allow read: if isAdminOfSchool(schoolId) ||
+                        isStaffOfSchool(schoolId) ||
+                        isParentOfSchool(schoolId);
+        allow create, update: if isAdminOfSchool(schoolId) ||
+                        isStaffOfSchool(schoolId);
+      }
+    }
+
+    // Kisi bhi doosri jagah kuch nahi — default deny.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

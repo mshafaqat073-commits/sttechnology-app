@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="my_test_app">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>my_test_app</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!--
+    Firebase JS SDK ko gstatic.com CDN se load karne ki bajaye is project
+    ke andar (web/vendor/) se load karte hain — taake app ko internet par
+    gstatic.com tak pahunchne ki zaroorat na pade (kuch networks/ISPs is
+    domain ko block/throttle karte hain).
+
+    Neeche 'flutterfire_ignore_scripts' un plugins ki list hai jinhe
+    FlutterFire khud CDN se auto-load NA kare — hum unhe manually,
+    window 'load' event par, local files se load karte hain.
+  -->
+  <script>
+    window.flutterfire_ignore_scripts = ['core', 'auth', 'firestore', 'storage', 'messaging'];
+  </script>
+</head>
+<body>
+  <!--
+    Purana <script src="flutter_bootstrap.js" async></script> yahan se
+    hata kar niche manually inject kiya ja raha hai — taake wo Firebase
+    (local) scripts load hone ke BAAD hi chale.
+  -->
+  <script>
+    window.addEventListener('load', async function (ev) {
+      // Local (self-hosted) Firebase JS SDK files load karo — CDN nahi.
+      window.firebase_core = await import('./vendor/firebase-app.js');
+      window.firebase_auth = await import('./vendor/firebase-auth.js');
+      window.firebase_firestore = await import('./vendor/firebase-firestore.js');
+      window.firebase_storage = await import('./vendor/firebase-storage.js');
+      window.firebase_messaging = await import('./vendor/firebase-messaging.js');
+
+      // Ab Flutter ka bootstrap script load karo (isay dynamically add
+      // kar rahe hain taake upar wale imports se pehle na chal jaye).
+      var script = document.createElement('script');
+      script.src = 'flutter_bootstrap.js';
+      script.async = true;
+      document.body.appendChild(script);
+    });
+  </script>
+</body>
+</html>

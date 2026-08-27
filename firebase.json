@@ -1,0 +1,44 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "aepschoolsystem-59874",
+          "appId": "1:366712251908:android:093ed2d4d3ca26a8f83751",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "aepschoolsystem-59874",
+          "configurations": {
+            "android": "1:366712251908:android:093ed2d4d3ca26a8f83751",
+            "ios": "1:366712251908:ios:417bf987ee7350a2f83751",
+            "macos": "1:366712251908:ios:417bf987ee7350a2f83751",
+            "web": "1:366712251908:web:55888a082fb3f590f83751",
+            "windows": "1:366712251908:web:a7ef2ba026047bb3f83751"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+      
+    }
+  ]
+}

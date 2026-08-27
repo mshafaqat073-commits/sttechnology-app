@@ -1,0 +1,203 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+
+/// Only ONE school is "active" across the whole app at a time — set at
+/// login time (Admin username/password, Teacher/Parent Login ID+PIN — all
+/// three flows store their schoolId here). After that, every page reads/
+/// writes data only within that schoolId, so two schools' data never mix.
+///
+/// The Firestore structure is now:
+///   schools/{schoolId}                     -> basic school info
+///   schools/{schoolId}/settings/global      -> schoolName, address, logoUrl
+///   schools/{schoolId}/students/{id}
+///   schools/{schoolId}/staff/{id}
+///   schools/{schoolId}/users/{id}           -> admin login (username/password)
+///   schools/{schoolId}/fee_payments/{id}
+///   ... etc. (every former top-level collection now lives under this)
+class SchoolContext {
+  static String? _schoolId;
+  static String? _schoolName;
+  static String? _logoUrl;
+  static String? _contactNumber;
+  static String? _contactEmail;
+  static String? _easypaisaNumber;
+  static String? _easypaisaAccountName;
+  static String? _ublIban;
+  static String? _ublAccountName;
+
+  /// This counter increments every time schoolName/logoUrl changes —
+  /// SchoolLogo / SchoolNameText widgets listen to it so that changing the
+  /// name/logo in Settings shows up instantly across the whole app
+  /// (without an app restart). See lib/school_branding.dart.
+  static final ValueNotifier<int> _version = ValueNotifier<int>(0);
+  static ValueListenable<int> get listenable => _version;
+
+  static String get schoolId {
+    final id = _schoolId;
+    if (id == null) {
+      throw StateError(
+          'SchoolContext.schoolId is not set. Firestore should not be '
+          'accessed before the login flow completes — SchoolContext.set() '
+          'must be called first.');
+    }
+    return id;
+  }
+
+  static String? get schoolIdOrNull => _schoolId;
+  static String? get schoolName => _schoolName;
+  static String? get logoUrl => _logoUrl;
+
+  /// Is school ka apna WhatsApp/contact number — Settings > WhatsApp
+  /// Number se set kiya jata hai. Har school apna number khud add karta
+  /// hai; jahan bhi app mein school ka contact number dikhana/use karna
+  /// ho (AI chat, SLC, letterhead waghera), wahan hardcoded number ki
+  /// jagah yehi field use karein.
+  static String? get contactNumber => _contactNumber;
+
+  /// This school's own contact email — Settings > Contact Email. Same
+  /// pattern as contactNumber above: wherever the app needs to show or
+  /// use an email address (reports, letterhead, AI chat, etc.), it should
+  /// read this field instead of a hardcoded address.
+  static String? get contactEmail => _contactEmail;
+  static bool get isSet => _schoolId != null;
+
+  /// School ka apna Easypaisa/UBL account — Settings > "Online Payment
+  /// Account" se set kiya jata hai. Parent app mein "Pay Fee Online"
+  /// screen par yehi account dikhaya jata hai (hardcoded developer
+  /// account ki jagah — har school apna account khud set karta hai).
+  static String? get easypaisaNumber => _easypaisaNumber;
+  static String? get easypaisaAccountName => _easypaisaAccountName;
+  static String? get ublIban => _ublIban;
+  static String? get ublAccountName => _ublAccountName;
+
+  /// Dono (Easypaisa + UBL) mein se koi bhi ek bhi set hai ya nahi —
+  /// PayFeeOnlinePage isse decide karta hai ke account cards dikhayein
+  /// ya "admin ne abhi set nahi kiya" wala message.
+  static bool get hasPaymentAccountSet =>
+      (_easypaisaNumber != null && _easypaisaNumber!.isNotEmpty) ||
+      (_ublIban != null && _ublIban!.isNotEmpty);
+
+  static void set(String id, {String? name}) {
+    _schoolId = id;
+    if (name != null) _schoolName = name;
+  }
+
+  /// Call this right after login (immediately after SchoolContext.set())
+  /// — it loads and caches schoolName and logoUrl from that school's
+  /// settings/global doc, so the whole app and PDFs can use it without
+  /// reading Firestore repeatedly.
+  ///
+  /// Also call this again after the name/logo is updated from the
+  /// Settings page, so the cache refreshes immediately.
+  static Future<void> loadBranding() async {
+    try {
+      final doc = await schoolCollection('settings').doc('global').get();
+      final data = doc.data();
+      final name = (data?['schoolName'] as String?)?.trim();
+      final logo = (data?['logoUrl'] as String?)?.trim();
+      final contact = (data?['contactNumber'] as String?)?.trim();
+      final email = (data?['contactEmail'] as String?)?.trim();
+      final easypaisaNum = (data?['easypaisaNumber'] as String?)?.trim();
+      final easypaisaName =
+          (data?['easypaisaAccountName'] as String?)?.trim();
+      final ublIbanVal = (data?['ublIban'] as String?)?.trim();
+      final ublNameVal = (data?['ublAccountName'] as String?)?.trim();
+      _schoolName = (name != null && name.isNotEmpty) ? name : null;
+      _logoUrl = (logo != null && logo.isNotEmpty) ? logo : null;
+      _contactNumber = (contact != null && contact.isNotEmpty) ? contact : null;
+      _contactEmail = (email != null && email.isNotEmpty) ? email : null;
+      _easypaisaNumber =
+          (easypaisaNum != null && easypaisaNum.isNotEmpty) ? easypaisaNum : null;
+      _easypaisaAccountName =
+          (easypaisaName != null && easypaisaName.isNotEmpty)
+              ? easypaisaName
+              : null;
+      _ublIban = (ublIbanVal != null && ublIbanVal.isNotEmpty) ? ublIbanVal : null;
+      _ublAccountName =
+          (ublNameVal != null && ublNameVal.isNotEmpty) ? ublNameVal : null;
+    } catch (_) {
+      // Network issue etc. — keep whatever is already cached.
+    }
+    _version.value++;
+  }
+
+  /// Call this BEFORE login (at app startup) — it loads schoolName/logoUrl
+  /// from the settings/global of whichever school is found in Firestore,
+  /// so the Role Selector and Login screen can also show that school's
+  /// own logo/name instead of a generic default (see
+  /// lib/app_branding.dart).
+  ///
+  /// NOTE: This does NOT set SchoolContext.schoolId — it only caches the
+  /// name/logo for display. The real "active school" is always decided
+  /// by SchoolContext.set() after login. If Firestore has more than one
+  /// school, any one of them may be returned (order is not guaranteed) —
+  /// this app is designed assuming one deployment per school, so in
+  /// practice there is virtually always just one school.
+  static Future<void> loadPreLoginBranding() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collectionGroup('settings')
+          .limit(1)
+          .get();
+      if (snap.docs.isNotEmpty) {
+        final data = snap.docs.first.data();
+        final name = (data['schoolName'] as String?)?.trim();
+        final logo = (data['logoUrl'] as String?)?.trim();
+        if (name != null && name.isNotEmpty) _schoolName = name;
+        if (logo != null && logo.isNotEmpty) _logoUrl = logo;
+      }
+    } catch (_) {
+      // Network issue, no school created yet, etc. — silently stay on
+      // default branding.
+    }
+    _version.value++;
+  }
+
+  /// Make sure to call this at logout, otherwise the next login could
+  /// show the previous school's data until a new SchoolContext.set() is
+  /// made.
+  static void clear() {
+    _schoolId = null;
+    _schoolName = null;
+    _logoUrl = null;
+    _contactNumber = null;
+    _contactEmail = null;
+    _easypaisaNumber = null;
+    _easypaisaAccountName = null;
+    _ublIban = null;
+    _ublAccountName = null;
+    _version.value++;
+  }
+}
+
+/// A reference to a collection inside the current (logged-in) school.
+/// Example: schoolCollection('students') ==
+///   schools/{SchoolContext.schoolId}/students
+CollectionReference<Map<String, dynamic>> schoolCollection(String name) {
+  return FirebaseFirestore.instance
+      .collection('schools')
+      .doc(SchoolContext.schoolId)
+      .collection(name);
+}
+
+/// The current school's own document — schools/{schoolId}
+DocumentReference<Map<String, dynamic>> schoolDoc() {
+  return FirebaseFirestore.instance
+      .collection('schools')
+      .doc(SchoolContext.schoolId);
+}
+
+/// Extracts the schoolId from the reference of any document under
+/// schools/{schoolId}/<collection>/<id>. Used at login time to find the
+/// schoolId of documents returned by a collectionGroup query (at that
+/// point SchoolContext isn't set yet, so schoolCollection() above can't
+/// be used).
+String schoolIdFromDoc(DocumentReference ref) {
+  final schoolDocRef = ref.parent.parent; // schools/{schoolId}
+  if (schoolDocRef == null || schoolDocRef.parent.id != 'schools') {
+    throw StateError(
+        'This document is not inside a schools/{schoolId}/... subcollection: '
+        '${ref.path}');
+  }
+  return schoolDocRef.id;
+}

@@ -1,0 +1,14 @@
+## netlify.toml
+## Ye file apne Flutter project ke ROOT folder mein rakho (jahan
+## pubspec.yaml hai) — Netlify ka default Linux build image mein
+## Flutter pehle se installed nahi hota, isliye build command khud
+## Flutter SDK download karke phir web build banata hai.
+
+[build]
+  command = "git clone https://github.com/flutter/flutter.git --depth 1 -b stable _flutter && export PATH=\"$PATH:$(pwd)/_flutter/bin\" && flutter doctor && flutter pub get && flutter build web --release"
+  publish = "build/web"
+
+[build.environment]
+  # Agar Flutter ka koi specific stable version pin karna ho to yahan
+  # branch/tag change kar sakte ho (upar -b stable ki jagah).
+  FLUTTER_VERSION = "stable"
