@@ -131,12 +131,12 @@ class _AppUpdateCheckerState extends State<AppUpdateChecker> {
       builder: (ctx) => PopScope(
         canPop: !forceUpdate,
         child: AlertDialog(
-          title: const Text('Naya update available hai'),
+          title: const Text('Update Available'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Version $latestVersion aa chuka hai.'),
+              Text('Version $latestVersion is now available.'),
               if (notes.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(notes, style: const TextStyle(fontSize: 13)),
@@ -147,7 +147,7 @@ class _AppUpdateCheckerState extends State<AppUpdateChecker> {
             if (!forceUpdate)
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Baad mein'),
+                child: const Text('Later'),
               ),
             ElevatedButton(
               onPressed: () async {
@@ -157,7 +157,7 @@ class _AppUpdateCheckerState extends State<AppUpdateChecker> {
                 }
                 if (!forceUpdate && ctx.mounted) Navigator.of(ctx).pop();
               },
-              child: const Text('Update karo'),
+              child: const Text('Update'),
             ),
           ],
         ),
