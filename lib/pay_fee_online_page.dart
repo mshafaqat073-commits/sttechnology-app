@@ -38,10 +38,30 @@ class PayFeeOnlinePage extends StatefulWidget {
 
 class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
   // Note: pehle yahan developer ka apna Easypaisa/UBL account hardcoded
-  // tha — ab har school SchoolContext.easypaisaNumber/ublIban (Settings >
-  // "Online Payment Account" se set kiya hua) use karta hai, taake jab
-  // ye app kisi bhi school/customer ko diya jaye to fee unke apne account
-  // mein jaye, developer ke account mein nahi.
+  // tha, phir sirf do fixed fields (Easypaisa + UBL) the — ab school
+  // Settings > "Online Payment Accounts" se jitne chahe accounts (JazzCash,
+  // Easypaisa, bank account, ya koi aur method) add kar sakta he, aur
+  // SchoolContext.paymentAccounts se yehi list yahan seedha dikhai jati
+  // he, taake jab ye app kisi bhi school/customer ko diya jaye to fee
+  // unke apne account(s) mein jaye, developer ke account mein nahi.
+
+  // Method ke hisab se card ka icon/color choose karta hai — koi bhi
+  // custom method ho to default wallet icon dikhta he.
+  IconData _iconForMethod(String method) {
+    final m = method.toLowerCase();
+    if (m.contains('jazzcash')) return Icons.phone_android;
+    if (m.contains('easypaisa')) return Icons.phone_android;
+    if (m.contains('bank')) return Icons.account_balance;
+    return Icons.account_balance_wallet;
+  }
+
+  Color _colorForMethod(String method) {
+    final m = method.toLowerCase();
+    if (m.contains('jazzcash')) return Colors.red;
+    if (m.contains('easypaisa')) return Colors.green;
+    if (m.contains('bank')) return Colors.indigo;
+    return Colors.teal;
+  }
 
   // Ye keys fee_structures document mein hoti hain lekin actual fee amount
   // nahi hain (student info / timestamps hain) — inhe kabhi bhi fee list
@@ -73,8 +93,23 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
 
   final _formKey = GlobalKey<FormState>();
   final _trxController = TextEditingController();
-  String _method = "Easypaisa";
+  String? _method;
   bool _submitting = false;
+
+  // Dropdown options come from whichever methods the school actually
+  // added in Settings (SchoolContext.paymentAccounts) — duplicates
+  // removed. Falls back to a generic list if the school hasn't set any
+  // account yet, so the form never ends up with an empty dropdown.
+  List<String> get _methodOptions {
+    final fromAccounts = SchoolContext.paymentAccounts
+        .map((a) => a['method'] ?? '')
+        .where((m) => m.isNotEmpty)
+        .toSet()
+        .toList();
+    return fromAccounts.isNotEmpty
+        ? fromAccounts
+        : ["JazzCash", "Easypaisa", "Bank Account", "Other"];
+  }
 
   // Har fee field ke liye alag "Paid" input — key = field name.
   final Map<String, TextEditingController> _paidControllers = {};
@@ -257,7 +292,7 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
         // karega (pay_fee_page.dart ki tarah).
         'fieldBreakdown': {for (var f in _feeFieldKeys) f: _paidFor(f)},
         'duesPaid': _duesPaidApplied(),
-        'method': _method,
+        'method': _method ?? _methodOptions.first,
         'transactionId': _trxController.text.trim(),
         'status': 'pending',
         'submittedAt': FieldValue.serverTimestamp(),
@@ -428,26 +463,20 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
                 ),
               ),
             )
-          else ...[
-            if (SchoolContext.easypaisaNumber != null)
-              _accountCard(
-                icon: Icons.phone_android,
-                color: Colors.green,
-                title: "Easypaisa",
-                number: SchoolContext.easypaisaNumber!,
-                accountName: SchoolContext.easypaisaAccountName ?? '',
-              ),
-            if (SchoolContext.easypaisaNumber != null)
-              const SizedBox(height: 10),
-            if (SchoolContext.ublIban != null)
-              _accountCard(
-                icon: Icons.account_balance,
-                color: Colors.indigo,
-                title: "UBL Bank",
-                number: SchoolContext.ublIban!,
-                accountName: SchoolContext.ublAccountName ?? '',
-              ),
-          ],
+          else
+            ...SchoolContext.paymentAccounts.map((account) {
+              final method = account['method'] ?? '';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _accountCard(
+                  icon: _iconForMethod(method),
+                  color: _colorForMethod(method),
+                  title: method,
+                  number: account['number'] ?? '',
+                  accountName: account['accountName'] ?? '',
+                ),
+              );
+            }),
           const SizedBox(height: 20),
           const Divider(),
           const SizedBox(height: 8),
@@ -534,18 +563,16 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
             child: Column(
               children: [
                 DropdownButtonFormField<String>(
-                  initialValue: _method,
+                  initialValue: _method ?? _methodOptions.first,
                   decoration: const InputDecoration(
                     labelText: "Payment Method",
                     border: OutlineInputBorder(),
                   ),
-                  items: const [
-                    DropdownMenuItem(
-                        value: "Easypaisa", child: Text("Easypaisa")),
-                    DropdownMenuItem(
-                        value: "UBL Bank", child: Text("UBL Bank")),
-                  ],
-                  onChanged: (v) => setState(() => _method = v ?? "Easypaisa"),
+                  items: _methodOptions
+                      .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                      .toList(),
+                  onChanged: (v) =>
+                      setState(() => _method = v ?? _methodOptions.first),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(

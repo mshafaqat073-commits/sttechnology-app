@@ -1,10 +1,53 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'school_context.dart';
 import 'class_section_service.dart';
+
+/// File extensions that Cloudinary can upload/serve under its "image"
+/// resource type (this includes PDFs — Cloudinary can render/preview
+/// them like images). Anything else (Word, Excel, PowerPoint, txt,
+/// zip, etc.) must be uploaded as "raw" or Cloudinary rejects it.
+const List<String> _imageLikeExtensions = [
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'webp',
+  'pdf'
+];
+
+/// Extensions the admin is allowed to pick under "Choose Document".
+const List<String> _pickableDocumentExtensions = [
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'txt'
+];
+
+bool _looksLikeImage(String url) {
+  final lower = url.toLowerCase();
+  return ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+      .any((ext) => lower.contains(ext));
+}
+
+Future<void> _openOrDownload(BuildContext context, String url) async {
+  final uri = Uri.parse(url);
+  final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!ok && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Could not open the document link.")),
+    );
+  }
+}
 
 /// Admin-only Document Management.
 ///
@@ -390,7 +433,10 @@ class _DocumentListPanelState extends State<_DocumentListPanel> {
   bool _uploading = false;
 
   Future<void> _uploadDocument() async {
-    final XFile? picked = await showModalBottomSheet<XFile?>(
+    // Returns the picked file's local path, from whichever source the
+    // admin chooses — camera/gallery give an image, "Choose Document"
+    // lets the admin pick a PDF, Word, Excel, PowerPoint or text file.
+    final String? pickedPath = await showModalBottomSheet<String?>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Wrap(
@@ -400,7 +446,7 @@ class _DocumentListPanelState extends State<_DocumentListPanel> {
               title: const Text("Take Photo"),
               onTap: () async {
                 final f = await _picker.pickImage(source: ImageSource.camera);
-                if (ctx.mounted) Navigator.pop(ctx, f);
+                if (ctx.mounted) Navigator.pop(ctx, f?.path);
               },
             ),
             ListTile(
@@ -408,7 +454,21 @@ class _DocumentListPanelState extends State<_DocumentListPanel> {
               title: const Text("Choose from Gallery"),
               onTap: () async {
                 final f = await _picker.pickImage(source: ImageSource.gallery);
-                if (ctx.mounted) Navigator.pop(ctx, f);
+                if (ctx.mounted) Navigator.pop(ctx, f?.path);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf),
+              title: const Text("Choose Document"),
+              subtitle: const Text("PDF, Word, Excel, PowerPoint, text"),
+              onTap: () async {
+                final result = await FilePicker.platform.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: _pickableDocumentExtensions,
+                );
+                if (ctx.mounted) {
+                  Navigator.pop(ctx, result?.files.single.path);
+                }
               },
             ),
           ],
@@ -416,7 +476,7 @@ class _DocumentListPanelState extends State<_DocumentListPanel> {
       ),
     );
 
-    if (picked == null) return;
+    if (pickedPath == null) return;
     if (!mounted) return;
 
     final TextEditingController titleController = TextEditingController();
@@ -476,10 +536,14 @@ class _DocumentListPanelState extends State<_DocumentListPanel> {
     setState(() => _uploading = true);
     try {
       final cloudinary = CloudinaryPublic('niilo9ek', 'shafi073', cache: false);
+      final String ext = pickedPath.split('.').last.toLowerCase();
+      final resourceType = _imageLikeExtensions.contains(ext)
+          ? CloudinaryResourceType.Auto
+          : CloudinaryResourceType.Raw;
       final response = await cloudinary.uploadFile(
         CloudinaryFile.fromFile(
-          picked.path,
-          resourceType: CloudinaryResourceType.Auto,
+          pickedPath,
+          resourceType: resourceType,
           folder: 'documents/${widget.ownerType}/${widget.ownerId}',
         ),
       );
@@ -535,6 +599,13 @@ class _DocumentListPanelState extends State<_DocumentListPanel> {
   }
 
   void _viewDocument(String url, String title) {
+    // Only actual image files render inline; PDFs and other document
+    // types (Word, Excel, PowerPoint, text) open/download externally
+    // instead, since Image.network can't display them.
+    if (!_looksLikeImage(url)) {
+      _openOrDownload(context, url);
+      return;
+    }
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -660,13 +731,13 @@ class _DocumentListPanelState extends State<_DocumentListPanel> {
                     date = DateFormat('dd-MM-yyyy HH:mm')
                         .format((data['uploadedAt'] as Timestamp).toDate());
                   }
-                  bool isPdf = url.toLowerCase().contains('.pdf');
+                  bool isImage = _looksLikeImage(url);
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
                       leading: Icon(
-                        isPdf ? Icons.picture_as_pdf : Icons.image,
+                        isImage ? Icons.image : Icons.picture_as_pdf,
                         color: Colors.deepPurple,
                       ),
                       title: Row(
@@ -684,11 +755,22 @@ class _DocumentListPanelState extends State<_DocumentListPanel> {
                         ],
                       ),
                       subtitle: Text("Uploaded: $date"),
-                      trailing: IconButton(
-                        icon:
-                            const Icon(Icons.delete_outline, color: Colors.red),
-                        tooltip: "Delete",
-                        onPressed: () => _deleteDocument(doc),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.download,
+                                color: Colors.deepPurple),
+                            tooltip: "Open / Download",
+                            onPressed: () => _openOrDownload(context, url),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline,
+                                color: Colors.red),
+                            tooltip: "Delete",
+                            onPressed: () => _deleteDocument(doc),
+                          ),
+                        ],
                       ),
                       onTap: () => _viewDocument(url, title),
                     ),

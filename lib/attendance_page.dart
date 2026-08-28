@@ -380,7 +380,7 @@ class _AttendancePageState extends State<AttendancePage>
         ],
         bottom: TabBar(
           controller: _tabController,
-          labelColor: Colors.red,
+          labelColor: Colors.white,
           unselectedLabelColor: Colors.grey,
           indicatorColor: Colors.white,
           labelStyle:

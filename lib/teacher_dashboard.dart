@@ -19,6 +19,7 @@ import 'online_classes_page.dart';
 import 'live_attendance_scanner_page.dart';
 import 'change_pin_dialog.dart';
 import 'teacher_performance_page.dart';
+import 'app_update_checker.dart';
 
 class TeacherDashboard extends StatelessWidget {
   final String staffDocId;
@@ -119,6 +120,12 @@ class TeacherDashboard extends StatelessWidget {
         title: const Text("Teacher Dashboard"),
         backgroundColor: Colors.teal[800],
         actions: [
+          IconButton(
+            icon: const Icon(Icons.system_update_alt, color: Colors.white),
+            tooltip: "Check for Update",
+            onPressed: () => AppUpdateChecker.of(context)
+                ?.checkForUpdate(showResult: true),
+          ),
           NotificationBellIcon(uids: [staffDocId]),
           IconButton(
             icon: const Icon(Icons.password),
@@ -148,9 +155,16 @@ class TeacherDashboard extends StatelessWidget {
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              child: Center(
+                child: ConstrainedBox(
+                  // Wide desktop/web screens ke liye content ko center
+                  // mein rakhne ke liye max width — warna cards edge-to-edge
+                  // stretch ho jate hain jaise role selector page pehle
+                  // se hi nahi hota.
+                  constraints: const BoxConstraints(maxWidth: 900),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                   Card(
                     elevation: 2,
                     shape: RoundedRectangleBorder(
@@ -417,7 +431,9 @@ class TeacherDashboard extends StatelessWidget {
                       ),
                     ],
                   ),
-                ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

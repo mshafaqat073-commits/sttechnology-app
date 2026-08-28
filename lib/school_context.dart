@@ -20,10 +20,13 @@ class SchoolContext {
   static String? _logoUrl;
   static String? _contactNumber;
   static String? _contactEmail;
-  static String? _easypaisaNumber;
-  static String? _easypaisaAccountName;
-  static String? _ublIban;
-  static String? _ublAccountName;
+
+  /// School's own online payment accounts (JazzCash, Easypaisa, bank
+  /// account, or any other method) — set from Settings > "Online Payment
+  /// Accounts". Each entry is a map with keys: 'method', 'number',
+  /// 'accountName'. Replaces the old fixed Easypaisa/UBL-only fields so
+  /// the admin can add any number of accounts of any method.
+  static List<Map<String, String>> _paymentAccounts = [];
 
   /// This counter increments every time schoolName/logoUrl changes —
   /// SchoolLogo / SchoolNameText widgets listen to it so that changing the
@@ -61,21 +64,16 @@ class SchoolContext {
   static String? get contactEmail => _contactEmail;
   static bool get isSet => _schoolId != null;
 
-  /// School ka apna Easypaisa/UBL account — Settings > "Online Payment
-  /// Account" se set kiya jata hai. Parent app mein "Pay Fee Online"
-  /// screen par yehi account dikhaya jata hai (hardcoded developer
-  /// account ki jagah — har school apna account khud set karta hai).
-  static String? get easypaisaNumber => _easypaisaNumber;
-  static String? get easypaisaAccountName => _easypaisaAccountName;
-  static String? get ublIban => _ublIban;
-  static String? get ublAccountName => _ublAccountName;
+  /// This school's own online payment accounts — set from Settings >
+  /// "Online Payment Accounts". The parent app's "Pay Fee Online" screen
+  /// shows exactly these accounts (no account is hardcoded — each school
+  /// adds its own via a dialog: method + account number + account name).
+  static List<Map<String, String>> get paymentAccounts => _paymentAccounts;
 
-  /// Dono (Easypaisa + UBL) mein se koi bhi ek bhi set hai ya nahi —
-  /// PayFeeOnlinePage isse decide karta hai ke account cards dikhayein
-  /// ya "admin ne abhi set nahi kiya" wala message.
-  static bool get hasPaymentAccountSet =>
-      (_easypaisaNumber != null && _easypaisaNumber!.isNotEmpty) ||
-      (_ublIban != null && _ublIban!.isNotEmpty);
+  /// Whether the school has added at least one payment account —
+  /// PayFeeOnlinePage uses this to decide whether to show the account
+  /// cards or an "admin hasn't set this up yet" message.
+  static bool get hasPaymentAccountSet => _paymentAccounts.isNotEmpty;
 
   static void set(String id, {String? name}) {
     _schoolId = id;
@@ -97,24 +95,16 @@ class SchoolContext {
       final logo = (data?['logoUrl'] as String?)?.trim();
       final contact = (data?['contactNumber'] as String?)?.trim();
       final email = (data?['contactEmail'] as String?)?.trim();
-      final easypaisaNum = (data?['easypaisaNumber'] as String?)?.trim();
-      final easypaisaName =
-          (data?['easypaisaAccountName'] as String?)?.trim();
-      final ublIbanVal = (data?['ublIban'] as String?)?.trim();
-      final ublNameVal = (data?['ublAccountName'] as String?)?.trim();
+      final rawAccounts = data?['paymentAccounts'] as List<dynamic>?;
       _schoolName = (name != null && name.isNotEmpty) ? name : null;
       _logoUrl = (logo != null && logo.isNotEmpty) ? logo : null;
       _contactNumber = (contact != null && contact.isNotEmpty) ? contact : null;
       _contactEmail = (email != null && email.isNotEmpty) ? email : null;
-      _easypaisaNumber =
-          (easypaisaNum != null && easypaisaNum.isNotEmpty) ? easypaisaNum : null;
-      _easypaisaAccountName =
-          (easypaisaName != null && easypaisaName.isNotEmpty)
-              ? easypaisaName
-              : null;
-      _ublIban = (ublIbanVal != null && ublIbanVal.isNotEmpty) ? ublIbanVal : null;
-      _ublAccountName =
-          (ublNameVal != null && ublNameVal.isNotEmpty) ? ublNameVal : null;
+      _paymentAccounts = (rawAccounts ?? [])
+          .map((e) => Map<String, String>.from(
+              (e as Map).map((k, v) => MapEntry(k.toString(), (v ?? '').toString()))))
+          .where((e) => (e['number'] ?? '').isNotEmpty)
+          .toList();
     } catch (_) {
       // Network issue etc. — keep whatever is already cached.
     }
@@ -162,10 +152,7 @@ class SchoolContext {
     _logoUrl = null;
     _contactNumber = null;
     _contactEmail = null;
-    _easypaisaNumber = null;
-    _easypaisaAccountName = null;
-    _ublIban = null;
-    _ublAccountName = null;
+    _paymentAccounts = [];
     _version.value++;
   }
 }

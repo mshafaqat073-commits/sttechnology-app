@@ -1,7 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'school_context.dart';
+
+bool _looksLikeImage(String url) {
+  final lower = url.toLowerCase();
+  return ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+      .any((ext) => lower.contains(ext));
+}
+
+/// Opens the document link in the browser/associated app so the parent
+/// can view and download it — used for both the download button and for
+/// tapping a non-image document (PDF, Word, Excel, PowerPoint, text)
+/// that can't be shown with Image.network.
+Future<void> _openOrDownload(BuildContext context, String url) async {
+  final uri = Uri.parse(url);
+  final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!ok && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Document link nahi khul saka.")),
+    );
+  }
+}
 
 /// Parent ke liye read-only Documents page.
 ///
@@ -51,6 +72,13 @@ class ParentDocumentsPage extends StatelessWidget {
   }
 
   void _viewDocument(BuildContext context, String url, String title) {
+    // Only real images preview inline; PDFs and other document types
+    // (Word, Excel, PowerPoint, text) open/download externally instead,
+    // since Image.network can't display them.
+    if (!_looksLikeImage(url)) {
+      _openOrDownload(context, url);
+      return;
+    }
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -97,7 +125,7 @@ class ParentDocumentsPage extends StatelessWidget {
       date = DateFormat('dd-MM-yyyy')
           .format((data['uploadedAt'] as Timestamp).toDate());
     }
-    bool isPdf = url.toLowerCase().contains('.pdf');
+    bool isImage = _looksLikeImage(url);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -109,7 +137,7 @@ class ParentDocumentsPage extends StatelessWidget {
           : null,
       child: ListTile(
         leading: Icon(
-          isPdf ? Icons.picture_as_pdf : Icons.image,
+          isImage ? Icons.image : Icons.picture_as_pdf,
           color: Colors.deepPurple,
         ),
         title: Row(
@@ -128,6 +156,11 @@ class ParentDocumentsPage extends StatelessWidget {
           isClassNotice ? "Class Notice  •  $date" : "Uploaded: $date",
           style: TextStyle(
               color: isClassNotice ? Colors.indigo : Colors.grey[700]),
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.download, color: Colors.deepPurple),
+          tooltip: "Download",
+          onPressed: () => _openOrDownload(context, url),
         ),
         onTap: () => _viewDocument(context, url, title),
       ),

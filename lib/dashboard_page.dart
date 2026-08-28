@@ -32,6 +32,7 @@ import 'birthday_page.dart';
 import 'live_attendance_scanner_page.dart';
 import 'online_classes_page.dart';
 import 'subscription_gate.dart';
+import 'app_update_checker.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -64,6 +65,12 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         backgroundColor: Colors.teal[800],
         actions: [
+          IconButton(
+            icon: const Icon(Icons.system_update_alt, color: Colors.white),
+            tooltip: "Check for Update",
+            onPressed: () => AppUpdateChecker.of(context)
+                ?.checkForUpdate(showResult: true),
+          ),
           IconButton(
             icon: const Icon(Icons.campaign, color: Colors.yellowAccent),
             tooltip: "Manage Notifications",
@@ -211,7 +218,14 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               ),
               Expanded(
-                child: ResponsiveGrid(
+                child: Center(
+                  // Wide desktop/web screens ke liye grid ko center mein
+                  // rakhne ke liye max width — warna cards edge-to-edge
+                  // poori screen tak stretch ho jate hain (role selector
+                  // page pehle se hi is tarah constrained hai).
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1100),
+                    child: ResponsiveGrid(
                   children: [
                     // --- Sab se zyada roz istemal hone wale ---
                     _dashboardCard(context, Icons.app_registration, "Admission",
@@ -268,6 +282,8 @@ class _DashboardPageState extends State<DashboardPage> {
                     _dashboardCard(
                         context, Icons.settings, "Settings", Colors.grey),
                   ],
+                    ),
+                  ),
                 ),
               ),
             ],

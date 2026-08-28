@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'add_staff_page.dart'; // Nayi file banani hogi
 import 'staff_detail_page.dart';
 import 'school_context.dart';
+import 'app_update_checker.dart';
 
 class StaffDashboard extends StatelessWidget {
   const StaffDashboard({super.key});
@@ -11,7 +12,16 @@ class StaffDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-          title: const Text("Staff Management"), backgroundColor: Colors.brown),
+          title: const Text("Staff Management"),
+          backgroundColor: Colors.brown,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.system_update_alt, color: Colors.white),
+              tooltip: "Check for Update",
+              onPressed: () => AppUpdateChecker.of(context)
+                  ?.checkForUpdate(showResult: true),
+            ),
+          ]),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.push(
             context, MaterialPageRoute(builder: (context) => AddStaffPage())),

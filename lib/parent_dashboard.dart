@@ -23,6 +23,7 @@ import 'parent_online_classes_page.dart';
 import 'change_pin_dialog.dart';
 import 'parent_performance_page.dart';
 import 'performance_bar_chart.dart';
+import 'app_update_checker.dart';
 
 /// This dashboard opens after Parent login — every student (sibling)
 /// linked to that phone number is listed here.
@@ -428,6 +429,12 @@ class ParentDashboard extends StatelessWidget {
         title: const Text("Parent Dashboard"),
         backgroundColor: Colors.indigo[700],
         actions: [
+          IconButton(
+            icon: const Icon(Icons.system_update_alt, color: Colors.white),
+            tooltip: "Check for Update",
+            onPressed: () => AppUpdateChecker.of(context)
+                ?.checkForUpdate(showResult: true),
+          ),
           NotificationBellIcon(
             uids: children.map((d) => d.id).toList(),
           ),
@@ -508,7 +515,14 @@ class ParentDashboard extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: ListView.builder(
+            child: Center(
+              // Wide desktop/web screens ke liye list ko center mein
+              // rakhne ke liye max width — warna cards edge-to-edge poori
+              // screen tak stretch ho jate hain (role selector page pehle
+              // se hi is tarah constrained hai).
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 700),
+                child: ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: children.length,
               itemBuilder: (context, index) {
@@ -582,6 +596,8 @@ class ParentDashboard extends StatelessWidget {
                   ),
                 );
               },
+                ),
+              ),
             ),
           ),
         ],

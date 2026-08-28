@@ -110,7 +110,14 @@ class MyApp extends StatelessWidget {
       // ParentLoginPage — login hone ke baad khud seedha sahi dashboard
       // par navigate kar deta hai, is liye yahan _RoleRouter/
       // authStateChanges ki zaroorat nahi rahi.)
-      home: AppUpdateChecker(child: const _SignOutThenRoleSelector()),
+      // AppUpdateChecker ab `builder:` mein hai (pehle `home:` mein tha) —
+      // is se ye poori app (Navigator ke har route/dashboard) ka ancestor
+      // ban jata hai, taake Admin/Parent/Teacher/Staff dashboards mein bhi
+      // AppUpdateChecker.of(context)?.checkForUpdate(showResult: true) se
+      // manual "Check for Update" button lagaya ja sake.
+      builder: (context, child) =>
+          AppUpdateChecker(child: child ?? const SizedBox.shrink()),
+      home: const _SignOutThenRoleSelector(),
     );
   }
 }

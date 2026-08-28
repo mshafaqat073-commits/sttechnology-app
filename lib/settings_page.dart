@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -20,6 +19,7 @@ import 'manage_classes_sections_dialog.dart';
 import 'school_context.dart';
 import 'school_branding.dart';
 import 'subscription_service.dart';
+import 'subscription_payment_page.dart';
 
 // Backup, Reset, and Import all share this one collection list so a
 // collection can never accidentally be left out of one of them.
@@ -225,14 +225,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   .set({fieldName: controller.text}, SetOptions(merge: true));
               if (fieldName == 'schoolName' ||
                   fieldName == 'contactNumber' ||
-                  fieldName == 'contactEmail' ||
-                  fieldName == 'easypaisaNumber' ||
-                  fieldName == 'easypaisaAccountName' ||
-                  fieldName == 'ublIban' ||
-                  fieldName == 'ublAccountName') {
+                  fieldName == 'contactEmail') {
                 // Refresh the cache immediately so the Dashboard/AI Chat/
-                // PDFs/Pay Fee Online show the new name/number/email/
-                // payment-account right away, without an app restart.
+                // PDFs show the new name/number/email right away, without
+                // an app restart.
                 await SchoolContext.loadBranding();
               }
               if (mounted) {
@@ -315,6 +311,138 @@ class _SettingsPageState extends State<SettingsPage> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text("Classes & Sections updated!"),
           backgroundColor: Colors.teal));
+    }
+  }
+
+  // 2c. Online payment accounts (JazzCash / Easypaisa / any other method)
+  // — instead of fixed Easypaisa/UBL-only fields, admin can now add any
+  // number of accounts here. Each is saved as {method, number,
+  // accountName} inside settings/global's 'paymentAccounts' list, and
+  // PayFeeOnlinePage (parent side) shows exactly whatever is added here.
+  static const List<String> _paymentMethodChoices = [
+    'JazzCash',
+    'Easypaisa',
+    'Bank Account',
+    'Other',
+  ];
+
+  Future<void> _addPaymentAccount() async {
+    String selectedMethod = _paymentMethodChoices.first;
+    final otherMethodController = TextEditingController();
+    final numberController = TextEditingController();
+    final accountNameController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text("Add Payment Account"),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedMethod,
+                    decoration: const InputDecoration(labelText: "Method"),
+                    items: _paymentMethodChoices
+                        .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                        .toList(),
+                    onChanged: (v) => setDialogState(
+                        () => selectedMethod = v ?? _paymentMethodChoices.first),
+                  ),
+                  if (selectedMethod == 'Other') ...[
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: otherMethodController,
+                      decoration: const InputDecoration(
+                          labelText: "Method Name",
+                          hintText: "e.g. NayaPay, SadaPay, Bank Transfer"),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? "Enter the method name"
+                          : null,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: numberController,
+                    decoration: const InputDecoration(
+                        labelText: "Account Number",
+                        hintText: "Phone number / IBAN / account no."),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? "Enter the account number"
+                        : null,
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: accountNameController,
+                    decoration: const InputDecoration(
+                        labelText: "Account Name (optional)"),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel")),
+            TextButton(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+                final method = selectedMethod == 'Other'
+                    ? otherMethodController.text.trim()
+                    : selectedMethod;
+
+                final doc =
+                    await schoolCollection('settings').doc('global').get();
+                final existing = List<dynamic>.from(
+                    (doc.data()?['paymentAccounts'] as List?) ?? []);
+                existing.add({
+                  'method': method,
+                  'number': numberController.text.trim(),
+                  'accountName': accountNameController.text.trim(),
+                });
+
+                await schoolCollection('settings').doc('global').set(
+                    {'paymentAccounts': existing}, SetOptions(merge: true));
+                await SchoolContext.loadBranding();
+
+                if (mounted) {
+                  Navigator.pop(context);
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text("Payment account added!")));
+                }
+              },
+              child: const Text("Add"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deletePaymentAccount(int index) async {
+    final doc = await schoolCollection('settings').doc('global').get();
+    final existing =
+        List<dynamic>.from((doc.data()?['paymentAccounts'] as List?) ?? []);
+    if (index < 0 || index >= existing.length) return;
+    existing.removeAt(index);
+
+    await schoolCollection('settings')
+        .doc('global')
+        .set({'paymentAccounts': existing}, SetOptions(merge: true));
+    await SchoolContext.loadBranding();
+
+    if (mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Payment account removed.")));
     }
   }
 
@@ -990,76 +1118,15 @@ class _SettingsPageState extends State<SettingsPage> {
             ));
   }
 
-  // Developer ke apne Easypaisa/UBL account (subscription renew karne ke
-  // liye) — ye hardcoded he kyunke ye har school ka nahi, sirf developer
-  // (Muhammad Shafaqat Ali Zafar) ka account he jahan customer subscription
-  // ka payment bhejta he.
-  static const String _devEasypaisaNumber = "0300-6585073";
-  static const String _devEasypaisaName = "Muhammad Shafaqat Ali Zafar";
-  static const String _devUblIban = "PK33 UNIL 0109 0003 2622 4775";
-  static const String _devUblName = "Muhammad Shafaqat Ali Zafar";
-
-  void _copyToClipboard(String value, String label) {
-    Clipboard.setData(ClipboardData(text: value));
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text("$label copied")));
-  }
-
-  Widget _devAccountRow(IconData icon, Color color, String title,
-      String number, String accountName) {
-    return ListTile(
-      dense: true,
-      leading: CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.15),
-          child: Icon(icon, color: color, size: 20)),
-      title: Text(title,
-          style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text("$number\n$accountName"),
-      isThreeLine: true,
-      trailing: IconButton(
-        icon: const Icon(Icons.copy, size: 20),
-        tooltip: "Copy",
-        onPressed: () => _copyToClipboard(number, title),
-      ),
-    );
-  }
-
-  // Subscription renew karne ke liye developer ke account details dialog
-  // mein dikhata he — sirf ek payment info screen he, koi payment gateway
-  // integration nahi (customer khud Easypaisa/Bank app se bhej kar
-  // developer ko screenshot/reference bhejta he).
+  // Subscription renew karne ke liye ab poora flow SubscriptionPaymentPage
+  // mein hai: developer ke Easypaisa/UBL account dikhana, screenshot
+  // upload karwana, aur pending request Firestore mein daalna (jise Super
+  // Admin panel se approve/reject kiya jata he). Numbers ab sirf ek
+  // jagah (subscription_payment_page.dart) hardcoded hain.
   void _showPayDeveloperDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Pay to Renew Subscription"),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
-                child: Text(
-                  "Subscription renew karne ke liye neeche diye gaye "
-                  "account mein payment bhej kar developer ko screenshot/"
-                  "reference number bhej dein.",
-                  style: TextStyle(fontSize: 13),
-                ),
-              ),
-              _devAccountRow(Icons.phone_android, Colors.green, "Easypaisa",
-                  _devEasypaisaNumber, _devEasypaisaName),
-              const Divider(),
-              _devAccountRow(Icons.account_balance, Colors.indigo,
-                  "UBL Bank", _devUblIban, _devUblName),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text("Close")),
-        ],
-      ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SubscriptionPaymentPage()),
     );
   }
 
@@ -1158,39 +1225,45 @@ class _SettingsPageState extends State<SettingsPage> {
               onTap: _manageClassesSections),
           const Divider(),
           const ListTile(
-              title: Text("ONLINE PAYMENT ACCOUNT (Parents ko dikhega)",
+              title: Text("ONLINE PAYMENT ACCOUNTS (Parents will see this)",
                   style: TextStyle(
                       fontWeight: FontWeight.bold, color: Colors.blue))),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Text(
-              "Ye aapka (school ka) apna Easypaisa/UBL account hai — jab "
-              "parent app mein 'Pay Fee Online' se fee jama karwayega to "
-              "usko yehi account number dikhega. Pehle isay yahan set kar "
-              "lein.",
+              "Add the account(s) you want parents to pay fee into — "
+              "JazzCash, Easypaisa, bank account, or any other method. "
+              "Whatever you add here shows up on the parent's 'Pay Fee "
+              "Online' screen.",
               style: TextStyle(fontSize: 12, color: Colors.black54),
             ),
           ),
-          ListTile(
-              leading: const Icon(Icons.phone_android, color: Colors.green),
-              title: const Text("Easypaisa Number"),
-              onTap: () =>
-                  _editSetting("Easypaisa Number", "easypaisaNumber")),
-          ListTile(
-              leading: const Icon(Icons.person, color: Colors.green),
-              title: const Text("Easypaisa Account Name"),
-              onTap: () => _editSetting(
-                  "Easypaisa Account Name", "easypaisaAccountName")),
-          ListTile(
-              leading:
-                  const Icon(Icons.account_balance, color: Colors.indigo),
-              title: const Text("UBL Bank IBAN"),
-              onTap: () => _editSetting("UBL Bank IBAN", "ublIban")),
-          ListTile(
-              leading: const Icon(Icons.person, color: Colors.indigo),
-              title: const Text("UBL Account Name"),
-              onTap: () =>
-                  _editSetting("UBL Account Name", "ublAccountName")),
+          const SizedBox(height: 4),
+          ...List.generate(SchoolContext.paymentAccounts.length, (i) {
+            final account = SchoolContext.paymentAccounts[i];
+            return ListTile(
+              leading: const Icon(Icons.account_balance_wallet,
+                  color: Colors.teal),
+              title: Text(
+                  "${account['method'] ?? ''} — ${account['number'] ?? ''}"),
+              subtitle: (account['accountName'] ?? '').isNotEmpty
+                  ? Text(account['accountName']!)
+                  : null,
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                tooltip: "Remove",
+                onPressed: () => _deletePaymentAccount(i),
+              ),
+            );
+          }),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: OutlinedButton.icon(
+              onPressed: _addPaymentAccount,
+              icon: const Icon(Icons.add),
+              label: const Text("Add Payment Account"),
+            ),
+          ),
           const Divider(),
           const ListTile(
               title: Text("DATA MANAGEMENT",

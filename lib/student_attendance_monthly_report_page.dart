@@ -218,6 +218,27 @@ class _StudentAttendanceMonthlyReportPageState
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
                       }
+                      // FIX: previously any error thrown by the Firestore
+                      // query (most commonly a FAILED_PRECONDITION because
+                      // the compound query below — equality on 'class' +
+                      // range on 'date' — needs a composite index) was
+                      // silently swallowed by `snapshot.data ?? []`, so the
+                      // page just showed "No students found" even though
+                      // the attendance records existed. Now the real error
+                      // is shown, and Firestore's error text for a missing
+                      // index includes a direct link to create it.
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              "ERROR loading monthly attendance:\n${snapshot.error}",
+                              style: const TextStyle(
+                                  color: Colors.red, fontSize: 13),
+                            ),
+                          ),
+                        );
+                      }
                       final list = snapshot.data ?? [];
                       if (list.isEmpty) {
                         return const Center(
@@ -270,7 +291,20 @@ class _StudentAttendanceMonthlyReportPageState
   }
 
   Future<void> _generateAndPrintPdf(BuildContext context) async {
-    final list = await _loadMonthlyData();
+    List<Map<String, dynamic>> list;
+    try {
+      list = await _loadMonthlyData();
+    } catch (e) {
+      // Same fix as the on-screen FutureBuilder: don't let a Firestore
+      // error (e.g. missing composite index) crash silently — tell the
+      // user what actually happened.
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Could not load attendance: $e")),
+        );
+      }
+      return;
+    }
     final monthLabel = DateFormat('MMMM yyyy').format(_selectedMonth);
 
     final pdf = pw.Document();
