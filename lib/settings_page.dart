@@ -1130,6 +1130,150 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  // Shows every payment this school has sent to the developer's account —
+  // pending, approved, or rejected — so the school always has a record of
+  // what it submitted and where each request currently stands. This reads
+  // the same top-level collection the Super Admin panel reviews requests
+  // from (kSubscriptionRequestsCollection), filtered to just this school's
+  // own submissions.
+  void _showPaymentHistorySheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (ctx, scrollController) {
+            return Column(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    "Payment History",
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection(kSubscriptionRequestsCollection)
+                        .where('schoolName',
+                            isEqualTo: currentSchoolDisplayName())
+                        .orderBy('requestedAt', descending: true)
+                        .snapshots(),
+                    builder: (context, snap) {
+                      if (snap.hasError) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(
+                              "Couldn't load payment history: ${snap.error}",
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.black54),
+                            ),
+                          ),
+                        );
+                      }
+                      if (!snap.hasData) {
+                        return const Center(
+                            child: CircularProgressIndicator());
+                      }
+                      final docs = snap.data!.docs;
+                      if (docs.isEmpty) {
+                        return const Center(
+                          child: Text(
+                              "You haven't sent any payments to the developer yet."),
+                        );
+                      }
+                      return ListView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.all(12),
+                        itemCount: docs.length,
+                        itemBuilder: (context, i) {
+                          final data =
+                              docs[i].data() as Map<String, dynamic>;
+                          final status =
+                              (data['status'] as String?) ?? 'pending';
+                          final note = (data['note'] as String?) ?? '';
+                          final ts = data['requestedAt'];
+                          final date = ts is Timestamp
+                              ? DateFormat('d MMM, yyyy – h:mm a')
+                                  .format(ts.toDate())
+                              : '';
+                          final reviewedTs = data['reviewedAt'];
+                          final reviewedDate = reviewedTs is Timestamp
+                              ? DateFormat('d MMM, yyyy – h:mm a')
+                                  .format(reviewedTs.toDate())
+                              : '';
+                          final reviewedDays = data['reviewedDays'];
+
+                          final Color statusColor = status == 'approved'
+                              ? Colors.green
+                              : (status == 'rejected'
+                                  ? Colors.red
+                                  : Colors.orange);
+                          final String statusLabel = status == 'approved'
+                              ? "Approved"
+                              : (status == 'rejected'
+                                  ? "Rejected"
+                                  : "Pending");
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            child: ListTile(
+                              leading: Icon(Icons.payments,
+                                  color: statusColor),
+                              title: Text("Submitted: $date"),
+                              subtitle: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  if (note.isNotEmpty) Text("Ref: $note"),
+                                  if (status != 'pending' &&
+                                      reviewedDate.isNotEmpty)
+                                    Text(
+                                      status == 'approved'
+                                          ? "Approved: $reviewedDate${reviewedDays != null ? ' (+$reviewedDays days)' : ''}"
+                                          : "Rejected: $reviewedDate",
+                                    ),
+                                ],
+                              ),
+                              trailing: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: statusColor),
+                                ),
+                                child: Text(
+                                  statusLabel,
+                                  style: TextStyle(
+                                      color: statusColor,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1175,6 +1319,13 @@ class _SettingsPageState extends State<SettingsPage> {
             title: const Text("Pay to Renew Subscription"),
             subtitle: const Text("Developer's Easypaisa / UBL account"),
             onTap: _showPayDeveloperDialog,
+          ),
+          ListTile(
+            leading: const Icon(Icons.receipt_long, color: Colors.teal),
+            title: const Text("Payment History"),
+            subtitle: const Text(
+                "Payments you've sent to the developer, and their status"),
+            onTap: _showPaymentHistorySheet,
           ),
           const ListTile(
               title: Text("GENERAL INFO",

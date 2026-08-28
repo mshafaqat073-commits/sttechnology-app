@@ -492,7 +492,15 @@ class _AddStaffPageState extends State<AddStaffPage> {
               ],
             ],
             const SizedBox(height: 20),
-            ElevatedButton(
+          ]),
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
                 onPressed: _isSaving ? null : _saveStaff,
                 child: _isSaving
                     ? const SizedBox(
@@ -501,8 +509,7 @@ class _AddStaffPageState extends State<AddStaffPage> {
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: Colors.white))
                     : Text(_isEditing ? "UPDATE STAFF" : "SAVE STAFF")),
-            const SizedBox(height: 24), // So it doesn't hide behind the gesture nav bar
-          ]),
+          ),
         ),
       ),
     );

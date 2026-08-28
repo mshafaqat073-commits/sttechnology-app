@@ -56,7 +56,13 @@ class _TimetableManagementPageState extends State<TimetableManagementPage> {
       TextEditingController(text: '15');
   bool _savingBuffer = false;
 
-  String get _classKey => "$_activeClass-${_activeSection ?? ''}";
+  // If no section is selected/active, the timetable is being set for the
+  // whole class (every section under it) rather than one specific section.
+  bool get _appliesToAllSections =>
+      _activeSection == null || _activeSection!.isEmpty;
+
+  String get _classKey =>
+      _appliesToAllSections ? "$_activeClass-ALL" : "$_activeClass-$_activeSection";
 
   @override
   void initState() {
@@ -157,6 +163,11 @@ class _TimetableManagementPageState extends State<TimetableManagementPage> {
     TimeOfDay endTime =
         _parseTime(data?['endTime']) ?? const TimeOfDay(hour: 9, minute: 0);
 
+    // When true, saving this period writes it to every day of the week
+    // instead of just the currently selected day, so the same period
+    // doesn't have to be re-entered for each day separately.
+    bool applyToAllDays = false;
+
     await showDialog(
       context: context,
       builder: (ctx) {
@@ -227,6 +238,18 @@ class _TimetableManagementPageState extends State<TimetableManagementPage> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 4),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: applyToAllDays,
+                      onChanged: (v) =>
+                          setDialogState(() => applyToAllDays = v ?? false),
+                      title: const Text("Apply to all days"),
+                      subtitle: const Text(
+                        "Saves this period for every day of the week instead of just the selected day",
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -246,20 +269,44 @@ class _TimetableManagementPageState extends State<TimetableManagementPage> {
                       );
                       return;
                     }
-                    final docId = "${_classKey}_${_selectedDay}_p$period";
-                    await schoolCollection('timetable')
-                        .doc(docId)
-                        .set({
+
+                    final periodData = {
                       'classKey': _classKey,
                       'className': _activeClass,
                       'section': _activeSection,
-                      'day': _selectedDay,
+                      'appliesToAllSections': _appliesToAllSections,
                       'period': period,
                       'subject': subjectController.text.trim(),
                       'teacherName': selectedTeacher ?? '',
                       'startTime': _formatTime(startTime),
                       'endTime': _formatTime(endTime),
-                    });
+                    };
+
+                    if (applyToAllDays) {
+                      // Write the same period to every day in one batch so
+                      // it doesn't have to be added separately per day.
+                      final batch = FirebaseFirestore.instance.batch();
+                      for (final day in _days) {
+                        final docId = "${_classKey}_${day}_p$period";
+                        final ref =
+                            schoolCollection('timetable').doc(docId);
+                        batch.set(ref, {...periodData, 'day': day});
+                      }
+                      await batch.commit();
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text(
+                                  "Period saved to all days")),
+                        );
+                      }
+                    } else {
+                      final docId = "${_classKey}_${_selectedDay}_p$period";
+                      await schoolCollection('timetable')
+                          .doc(docId)
+                          .set({...periodData, 'day': _selectedDay});
+                    }
+
                     if (ctx.mounted) Navigator.pop(ctx);
                   },
                   child: const Text("Save"),
@@ -392,6 +439,20 @@ class _TimetableManagementPageState extends State<TimetableManagementPage> {
             ),
           ),
           if (_activeClass != null) ...[
+            if (_appliesToAllSections)
+              Container(
+                width: double.infinity,
+                color: Colors.blue[50],
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Text(
+                  "No section selected — this timetable applies to all sections of $_activeClass.",
+                  style: TextStyle(
+                      color: Colors.blue[900],
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13),
+                ),
+              ),
             SizedBox(
               height: 44,
               child: ListView(

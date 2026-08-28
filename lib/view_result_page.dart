@@ -160,8 +160,6 @@ class _ViewResultPageState extends State<ViewResultPage> {
         TextEditingController(text: currentData['section'] ?? '');
     final termController =
         TextEditingController(text: currentData['term'] ?? 'Final Term');
-    final studentPicController = TextEditingController(
-        text: currentData['imageUrl'] ?? currentData['studentPicUrl'] ?? '');
 
     final List<String> termOptions = [
       'First Term',
@@ -248,13 +246,6 @@ class _ViewResultPageState extends State<ViewResultPage> {
                             }
                           });
                         },
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: studentPicController,
-                        decoration: const InputDecoration(
-                            labelText:
-                                "Student Picture URL (Cloudinary Secure URL)"),
                       ),
                       const SizedBox(height: 15),
                       const Divider(thickness: 2),
@@ -366,8 +357,6 @@ class _ViewResultPageState extends State<ViewResultPage> {
                       'class': classController.text.trim(),
                       'section': sectionController.text.trim(),
                       'term': termController.text.trim(),
-                      'imageUrl': studentPicController.text.trim(),
-                      'studentPicUrl': studentPicController.text.trim(),
                       'subjects': updatedSubjects,
                       'grandTotal': totalMarksSum,
                       'grandObtained': obtainedMarksSum,

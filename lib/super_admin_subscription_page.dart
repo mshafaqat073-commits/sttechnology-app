@@ -211,9 +211,14 @@ class _SuperAdminSubscriptionPageState
 
   Widget _paymentRequestsTab() {
     return StreamBuilder<QuerySnapshot>(
+      // Shows every payment request regardless of status (pending, approved,
+      // or rejected) so approved/rejected payments stay on record here
+      // instead of disappearing from the panel once they're reviewed. The
+      // tab badge above still counts pending ones only (see the TabBar
+      // StreamBuilder), and Approve/Reject actions only appear on requests
+      // that are still pending.
       stream: FirebaseFirestore.instance
           .collection(kSubscriptionRequestsCollection)
-          .where('status', isEqualTo: 'pending')
           .orderBy('requestedAt', descending: true)
           .snapshots(),
       builder: (context, snap) {
@@ -261,7 +266,7 @@ class _SuperAdminSubscriptionPageState
         }
         final docs = snap.data!.docs;
         if (docs.isEmpty) {
-          return const Center(child: Text("No pending payment requests."));
+          return const Center(child: Text("No payment requests yet."));
         }
         return ListView.builder(
           padding: const EdgeInsets.all(12),
@@ -273,81 +278,71 @@ class _SuperAdminSubscriptionPageState
             final schoolId = (data['schoolId'] as String?) ?? '';
             final note = (data['note'] as String?) ?? '';
             final screenshotUrl = (data['screenshotUrl'] as String?) ?? '';
+            final status = (data['status'] as String?) ?? 'pending';
             final ts = data['requestedAt'];
             final date = ts is Timestamp
                 ? DateFormat('d MMM, yyyy – h:mm a').format(ts.toDate())
                 : '';
+            final reviewedTs = data['reviewedAt'];
+            final reviewedDate = reviewedTs is Timestamp
+                ? DateFormat('d MMM, yyyy – h:mm a').format(reviewedTs.toDate())
+                : '';
+            final reviewedDays = data['reviewedDays'];
 
+            final Color statusColor = status == 'approved'
+                ? Colors.green
+                : (status == 'rejected' ? Colors.red : Colors.orange);
+            final String statusLabel = status == 'approved'
+                ? "Approved"
+                : (status == 'rejected' ? "Rejected" : "Pending");
+
+            // Compact single-line row per record — full details (note,
+            // screenshot, reviewed info, Approve/Reject) only appear once
+            // the row is tapped, via _showRequestDetails below. Keeps the
+            // list scannable instead of every record's screenshot and
+            // buttons being expanded inline all at once.
             return Card(
               color: Colors.white,
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(schoolName,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Colors.black87)),
-                    Text("Submitted: $date",
-                        style: const TextStyle(
-                            fontSize: 12, color: Colors.black54)),
-                    if (note.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          "Ref: $note",
-                          style: const TextStyle(color: Colors.black87),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    if (screenshotUrl.isNotEmpty)
-                      GestureDetector(
-                        onTap: () => _viewScreenshot(screenshotUrl),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            screenshotUrl,
-                            height: 200,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const SizedBox(
-                              height: 120,
-                              child: Center(child: Icon(Icons.broken_image)),
-                            ),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () =>
-                                _rejectRequest(doc.id, schoolName),
-                            style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.red),
-                            child: const Text("Reject"),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: schoolId.isEmpty
-                                ? null
-                                : () => _approveRequest(
-                                    doc.id, schoolId, schoolName),
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                foregroundColor: Colors.white),
-                            child: const Text("Approve"),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              child: ListTile(
+                onTap: () => _showRequestDetails(
+                  doc: doc,
+                  schoolName: schoolName,
+                  schoolId: schoolId,
+                  note: note,
+                  screenshotUrl: screenshotUrl,
+                  status: status,
+                  statusLabel: statusLabel,
+                  statusColor: statusColor,
+                  date: date,
+                  reviewedDate: reviewedDate,
+                  reviewedDays: reviewedDays,
+                ),
+                leading: CircleAvatar(
+                  backgroundColor: statusColor,
+                  child: const Icon(Icons.payments, color: Colors.white),
+                ),
+                title: Text(schoolName,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, color: Colors.black87)),
+                subtitle: Text("Submitted: $date",
+                    style: const TextStyle(
+                        fontSize: 12, color: Colors.black54)),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: statusColor),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12),
+                  ),
                 ),
               ),
             );
@@ -404,6 +399,145 @@ class _SuperAdminSubscriptionPageState
         SnackBar(content: Text("$schoolName extended by $result days.")),
       );
     }
+  }
+
+  // Shows the full record for a single payment request — submitted date,
+  // status, reference note, reviewed info, screenshot, and (only while
+  // still pending) the Approve/Reject actions. Opened by tapping a row in
+  // the compact list built in _paymentRequestsTab.
+  void _showRequestDetails({
+    required QueryDocumentSnapshot doc,
+    required String schoolName,
+    required String schoolId,
+    required String note,
+    required String screenshotUrl,
+    required String status,
+    required String statusLabel,
+    required Color statusColor,
+    required String date,
+    required String reviewedDate,
+    required int? reviewedDays,
+  }) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(schoolName,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, color: Colors.black87)),
+            ),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: statusColor),
+              ),
+              child: Text(
+                statusLabel,
+                style: TextStyle(
+                    color: statusColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Submitted: $date",
+                  style: const TextStyle(fontSize: 13, color: Colors.black54)),
+              if (status != 'pending' && reviewedDate.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    status == 'approved'
+                        ? "Approved: $reviewedDate${reviewedDays != null ? ' (+$reviewedDays days)' : ''}"
+                        : "Rejected: $reviewedDate",
+                    style: TextStyle(fontSize: 13, color: statusColor),
+                  ),
+                ),
+              if (note.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    "Ref: $note",
+                    style: const TextStyle(color: Colors.black87),
+                  ),
+                ),
+              if (screenshotUrl.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: () => _viewScreenshot(screenshotUrl),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      screenshotUrl,
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox(
+                        height: 120,
+                        child: Center(child: Icon(Icons.broken_image)),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              // Approve/Reject actions only make sense while the request
+              // is still pending — once reviewed, the status badge and
+              // reviewed date above are the permanent record.
+              if (status == 'pending') ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.pop(dialogContext);
+                          _rejectRequest(doc.id, schoolName);
+                        },
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red),
+                        child: const Text("Reject"),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: schoolId.isEmpty
+                            ? null
+                            : () {
+                                Navigator.pop(dialogContext);
+                                _approveRequest(doc.id, schoolId, schoolName);
+                              },
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white),
+                        child: const Text("Approve"),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Close"),
+          ),
+        ],
+      ),
+    );
   }
 
   void _viewScreenshot(String url) {

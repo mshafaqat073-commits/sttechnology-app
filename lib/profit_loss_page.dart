@@ -76,78 +76,101 @@ class _ProfitLossPageState extends State<ProfitLossPage> {
               stream: schoolCollection('fee_history').snapshots(),
               builder: (context, feeSnap) {
                 return StreamBuilder<QuerySnapshot>(
-                  // Expenses: from expenses 'paid' (as saved by AddExpensePage)
-                  stream: schoolCollection('expenses').snapshots(),
-                  builder: (context, expSnap) {
+                  // Other Income: from other_incomes 'amountPaid' (rent,
+                  // donations, etc.) — same source the Profit & Loss Report
+                  // page uses, so the dashboard total matches the report.
+                  stream: schoolCollection('other_incomes').snapshots(),
+                  builder: (context, otherSnap) {
                     return StreamBuilder<QuerySnapshot>(
-                      // Monthly fee average: sum of monthlyFee across all
-                      // students, divided by total number of students.
-                      stream: schoolCollection('students').snapshots(),
-                      builder: (context, studentSnap) {
-                        if (!feeSnap.hasData ||
-                            !expSnap.hasData ||
-                            !studentSnap.hasData) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
+                      // Expenses: from expenses 'paid' (as saved by AddExpensePage)
+                      stream: schoolCollection('expenses').snapshots(),
+                      builder: (context, expSnap) {
+                        return StreamBuilder<QuerySnapshot>(
+                          // Monthly fee average: sum of monthlyFee across all
+                          // students, divided by total number of students.
+                          stream: schoolCollection('students').snapshots(),
+                          builder: (context, studentSnap) {
+                            if (!feeSnap.hasData ||
+                                !otherSnap.hasData ||
+                                !expSnap.hasData ||
+                                !studentSnap.hasData) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
 
-                        // Calculate Total Income (filtered by selected period)
-                        double totalIncome = 0;
-                        for (var doc in feeSnap.data!.docs) {
-                          var data = doc.data() as Map<String, dynamic>;
-                          if (!_inSelectedPeriod(data['date'] as Timestamp?)) {
-                            continue;
-                          }
-                          totalIncome += (data['amountPaid'] ?? 0).toDouble();
-                        }
+                            // Calculate Fee Income (filtered by selected period)
+                            double feeIncome = 0;
+                            for (var doc in feeSnap.data!.docs) {
+                              var data = doc.data() as Map<String, dynamic>;
+                              if (!_inSelectedPeriod(data['date'] as Timestamp?)) {
+                                continue;
+                              }
+                              feeIncome += (data['amountPaid'] ?? 0).toDouble();
+                            }
 
-                        // Calculate Total Expenses (filtered by selected period)
-                        double totalExpense = 0;
-                        for (var doc in expSnap.data!.docs) {
-                          var data = doc.data() as Map<String, dynamic>;
-                          if (!_inSelectedPeriod(data['date'] as Timestamp?)) {
-                            continue;
-                          }
-                          totalExpense += (data['paid'] ?? 0).toDouble();
-                        }
+                            // Calculate Other Income (filtered by selected period)
+                            double otherIncome = 0;
+                            for (var doc in otherSnap.data!.docs) {
+                              var data = doc.data() as Map<String, dynamic>;
+                              if (!_inSelectedPeriod(data['date'] as Timestamp?)) {
+                                continue;
+                              }
+                              otherIncome += (data['amountPaid'] ?? 0).toDouble();
+                            }
 
-                        double netProfit = totalIncome - totalExpense;
+                            double totalIncome = feeIncome + otherIncome;
 
-                        // Average (Monthly) Fee = sum of every student's
-                        // monthlyFee (from the students collection) divided by
-                        // the total number of students. This is a current
-                        // snapshot, not a flow, so it isn't affected by the
-                        // period filter.
-                        double totalMonthlyFee = 0;
-                        for (var doc in studentSnap.data!.docs) {
-                          var data = doc.data() as Map<String, dynamic>;
-                          totalMonthlyFee += (data['monthlyFee'] ?? 0).toDouble();
-                        }
-                        final int studentCount = studentSnap.data!.docs.length;
-                        final double averageFee =
-                            studentCount > 0 ? totalMonthlyFee / studentCount : 0;
+                            // Calculate Total Expenses (filtered by selected period)
+                            double totalExpense = 0;
+                            for (var doc in expSnap.data!.docs) {
+                              var data = doc.data() as Map<String, dynamic>;
+                              if (!_inSelectedPeriod(data['date'] as Timestamp?)) {
+                                continue;
+                              }
+                              totalExpense += (data['paid'] ?? 0).toDouble();
+                            }
 
-                        return SingleChildScrollView(
-                          padding: const EdgeInsets.all(20.0),
-                          child: Column(
-                            children: [
-                              _buildStatCard("Total Income",
-                                  "Rs. ${totalIncome.toStringAsFixed(0)}", Colors.green),
-                              _buildStatCard("Total Expenses",
-                                  "Rs. ${totalExpense.toStringAsFixed(0)}", Colors.red),
-                              const Divider(height: 40, thickness: 2),
-                              _buildStatCard(
-                                netProfit >= 0 ? "Net Profit" : "Net Loss",
-                                "Rs. ${netProfit.abs().toStringAsFixed(0)}",
-                                netProfit >= 0 ? Colors.blue : Colors.orange,
+                            double netProfit = totalIncome - totalExpense;
+
+                            // Average (Monthly) Fee = sum of every student's
+                            // monthlyFee (from the students collection) divided by
+                            // the total number of students. This is a current
+                            // snapshot, not a flow, so it isn't affected by the
+                            // period filter.
+                            double totalMonthlyFee = 0;
+                            for (var doc in studentSnap.data!.docs) {
+                              var data = doc.data() as Map<String, dynamic>;
+                              totalMonthlyFee += (data['monthlyFee'] ?? 0).toDouble();
+                            }
+                            final int studentCount = studentSnap.data!.docs.length;
+                            final double averageFee =
+                                studentCount > 0 ? totalMonthlyFee / studentCount : 0;
+
+                            return SingleChildScrollView(
+                              padding: const EdgeInsets.all(20.0),
+                              child: Column(
+                                children: [
+                                  _buildStatCard("Total Income",
+                                      "Rs. ${totalIncome.toStringAsFixed(0)}", Colors.green),
+                                  _buildStatCard("Other Income",
+                                      "Rs. ${otherIncome.toStringAsFixed(0)}", Colors.teal),
+                                  _buildStatCard("Total Expenses",
+                                      "Rs. ${totalExpense.toStringAsFixed(0)}", Colors.red),
+                                  const Divider(height: 40, thickness: 2),
+                                  _buildStatCard(
+                                    netProfit >= 0 ? "Net Profit" : "Net Loss",
+                                    "Rs. ${netProfit.abs().toStringAsFixed(0)}",
+                                    netProfit >= 0 ? Colors.blue : Colors.orange,
+                                  ),
+                                  const Divider(height: 40, thickness: 2),
+                                  _buildStatCard(
+                                    "Average Monthly Fee (per student)",
+                                    "Rs. ${averageFee.toStringAsFixed(0)}",
+                                    Colors.purple,
+                                  ),
+                                ],
                               ),
-                              const Divider(height: 40, thickness: 2),
-                              _buildStatCard(
-                                "Average Monthly Fee (per student)",
-                                "Rs. ${averageFee.toStringAsFixed(0)}",
-                                Colors.purple,
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         );
                       },
                     );

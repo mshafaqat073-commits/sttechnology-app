@@ -231,6 +231,15 @@ class _AddIncomeOrFeePageState extends State<AddIncomeOrFeePage> {
             _controllers[key]!.text =
                 existing != null ? existing.toString() : '0';
           }
+
+          // Monthly Fee is NOT stored/edited from here — it always comes
+          // straight from the student's own record (students collection)
+          // and the field is read-only in the UI (see _buildFeeTextField).
+          if (_controllers.containsKey('monthlyFee')) {
+            var studentMonthlyFee = data['monthlyFee'];
+            _controllers['monthlyFee']!.text =
+                studentMonthlyFee != null ? studentMonthlyFee.toString() : '0';
+          }
         });
       }
     } catch (e) {
@@ -411,7 +420,7 @@ class _AddIncomeOrFeePageState extends State<AddIncomeOrFeePage> {
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    "Each field below is pre-filled with its current value — whatever value you type becomes that field's final value (overwrite).",
+                    "Each field below is pre-filled with its current value — whatever value you type becomes that field's final value (overwrite). Monthly Fee is taken automatically from the student's record and can't be edited here.",
                     style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey,
@@ -435,6 +444,7 @@ class _AddIncomeOrFeePageState extends State<AddIncomeOrFeePage> {
                     _controllers[key]!,
                     isCustom: !_defaultFieldKeys.contains(key),
                     onRemove: () => _removeField(key),
+                    readOnly: key == 'monthlyFee',
                   );
                 }).toList(),
               ),
@@ -487,13 +497,17 @@ class _AddIncomeOrFeePageState extends State<AddIncomeOrFeePage> {
   }
 
   Widget _buildFeeTextField(String label, TextEditingController controller,
-      {bool isCustom = false, VoidCallback? onRemove}) {
+      {bool isCustom = false, VoidCallback? onRemove, bool readOnly = false}) {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.number,
+      readOnly: readOnly,
+      style: readOnly ? TextStyle(color: Colors.grey.shade700) : null,
       decoration: InputDecoration(
-        labelText: label,
+        labelText: readOnly ? "$label (auto)" : label,
         border: const OutlineInputBorder(),
+        filled: readOnly,
+        fillColor: readOnly ? Colors.grey.shade200 : null,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         suffixIcon: isCustom
             ? IconButton(

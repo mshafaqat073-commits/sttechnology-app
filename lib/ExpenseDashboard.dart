@@ -205,7 +205,7 @@ class _UpdateExpensePageState extends State<UpdateExpensePage> {
   Widget build(BuildContext context) {
     return Scaffold(
         appBar: AppBar(title: const Text("Update Expense")),
-        body: Padding(
+        body: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
           child: Column(children: [
             TextField(

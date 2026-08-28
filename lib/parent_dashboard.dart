@@ -429,35 +429,66 @@ class ParentDashboard extends StatelessWidget {
         title: const Text("Parent Dashboard"),
         backgroundColor: Colors.indigo[700],
         actions: [
-          IconButton(
-            icon: const Icon(Icons.system_update_alt, color: Colors.white),
-            tooltip: "Check for Update",
-            onPressed: () => AppUpdateChecker.of(context)
-                ?.checkForUpdate(showResult: true),
-          ),
           NotificationBellIcon(
             uids: children.map((d) => d.id).toList(),
           ),
-          IconButton(
-            icon: const Icon(Icons.password),
-            tooltip: "Change PIN",
-            onPressed: () => _changePin(context),
-          ),
-          IconButton(
-            icon: const Icon(Icons.auto_awesome, color: Colors.yellowAccent),
-            tooltip: "AI Assistant",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => const AIChatPage(role: 'parent')),
-              );
+          // Less-used actions collapsed into a single 3-dot menu so the
+          // AppBar stays uncluttered.
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            tooltip: "More Options",
+            onSelected: (value) {
+              switch (value) {
+                case 'update':
+                  AppUpdateChecker.of(context)
+                      ?.checkForUpdate(showResult: true);
+                  break;
+                case 'pin':
+                  _changePin(context);
+                  break;
+                case 'ai':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) =>
+                            const AIChatPage(role: 'parent')),
+                  );
+                  break;
+                case 'logout':
+                  _logout(context);
+                  break;
+              }
             },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: "Logout",
-            onPressed: () => _logout(context),
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'update',
+                child: ListTile(
+                  leading: Icon(Icons.system_update_alt),
+                  title: Text("Check for Update"),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'pin',
+                child: ListTile(
+                  leading: Icon(Icons.password),
+                  title: Text("Change PIN"),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'ai',
+                child: ListTile(
+                  leading: Icon(Icons.auto_awesome, color: Colors.orange),
+                  title: Text("AI Assistant"),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'logout',
+                child: ListTile(
+                  leading: Icon(Icons.logout, color: Colors.red),
+                  title: Text("Logout"),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -516,10 +547,10 @@ class ParentDashboard extends StatelessWidget {
           ),
           Expanded(
             child: Center(
-              // Wide desktop/web screens ke liye list ko center mein
-              // rakhne ke liye max width — warna cards edge-to-edge poori
-              // screen tak stretch ho jate hain (role selector page pehle
-              // se hi is tarah constrained hai).
+              // Max width to keep the list centered on wide desktop/web
+              // screens — otherwise cards would stretch edge-to-edge
+              // (the role selector page is already constrained the same
+              // way).
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 700),
                 child: ListView.builder(

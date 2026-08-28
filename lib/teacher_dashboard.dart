@@ -120,33 +120,64 @@ class TeacherDashboard extends StatelessWidget {
         title: const Text("Teacher Dashboard"),
         backgroundColor: Colors.teal[800],
         actions: [
-          IconButton(
-            icon: const Icon(Icons.system_update_alt, color: Colors.white),
-            tooltip: "Check for Update",
-            onPressed: () => AppUpdateChecker.of(context)
-                ?.checkForUpdate(showResult: true),
-          ),
           NotificationBellIcon(uids: [staffDocId]),
-          IconButton(
-            icon: const Icon(Icons.password),
-            tooltip: "Change PIN",
-            onPressed: () => _changePin(context),
-          ),
-          IconButton(
-            icon: const Icon(Icons.auto_awesome, color: Colors.yellowAccent),
-            tooltip: "AI Assistant",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => const AIChatPage(role: 'teacher')),
-              );
+          // Less-used actions collapsed into a single 3-dot menu so the
+          // AppBar stays uncluttered.
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            tooltip: "More Options",
+            onSelected: (value) {
+              switch (value) {
+                case 'update':
+                  AppUpdateChecker.of(context)
+                      ?.checkForUpdate(showResult: true);
+                  break;
+                case 'pin':
+                  _changePin(context);
+                  break;
+                case 'ai':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) =>
+                            const AIChatPage(role: 'teacher')),
+                  );
+                  break;
+                case 'logout':
+                  _logout(context);
+                  break;
+              }
             },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: "Logout",
-            onPressed: () => _logout(context),
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'update',
+                child: ListTile(
+                  leading: Icon(Icons.system_update_alt),
+                  title: Text("Check for Update"),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'pin',
+                child: ListTile(
+                  leading: Icon(Icons.password),
+                  title: Text("Change PIN"),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'ai',
+                child: ListTile(
+                  leading: Icon(Icons.auto_awesome, color: Colors.orange),
+                  title: Text("AI Assistant"),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'logout',
+                child: ListTile(
+                  leading: Icon(Icons.logout, color: Colors.red),
+                  title: Text("Logout"),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -157,10 +188,10 @@ class TeacherDashboard extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               child: Center(
                 child: ConstrainedBox(
-                  // Wide desktop/web screens ke liye content ko center
-                  // mein rakhne ke liye max width — warna cards edge-to-edge
-                  // stretch ho jate hain jaise role selector page pehle
-                  // se hi nahi hota.
+                  // Max width to keep the content centered on wide
+                  // desktop/web screens — otherwise cards would stretch
+                  // edge-to-edge, unlike the role selector page which is
+                  // already constrained this way.
                   constraints: const BoxConstraints(maxWidth: 900),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

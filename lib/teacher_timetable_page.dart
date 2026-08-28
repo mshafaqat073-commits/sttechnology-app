@@ -48,7 +48,17 @@ class _TeacherTimetablePageState extends State<TeacherTimetablePage> {
   }
 
   List<String> get _classKeys => widget.assignedClasses
-      .map((a) => "${a['class']}-${a['section'] ?? ''}")
+      .map((a) =>
+          "${(a['class'] ?? '').trim()}-${(a['section'] ?? '').trim()}")
+      .toSet()
+      .toList();
+
+  // Class names only (no section) — used to also match timetable entries
+  // the admin set for a whole class (appliesToAllSections == true), which
+  // apply regardless of which section this class/section combo is in.
+  List<String> get _classNames => widget.assignedClasses
+      .map((a) => (a['class'] ?? '').trim())
+      .toSet()
       .toList();
 
   @override
@@ -93,15 +103,45 @@ class _TeacherTimetablePageState extends State<TeacherTimetablePage> {
             child: _classKeys.isEmpty
                 ? const Center(child: Text("No class assigned"))
                 : StreamBuilder<QuerySnapshot>(
+                    // Only filter by 'day' on the server (a single equality
+                    // filter never needs a composite index) and match the
+                    // teacher/parent's classKey(s) locally below. The old
+                    // query combined whereIn('classKey', ...) with
+                    // where('day', ...), which needs a Firestore composite
+                    // index — when that index wasn't created, Firestore
+                    // silently failed the query, so the admin-set timetable
+                    // never showed up here even though it saved correctly.
                     stream: schoolCollection('timetable')
-                        .where('classKey', whereIn: _classKeys)
                         .where('day', isEqualTo: _selectedDay)
                         .snapshots(),
                     builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              "Could not load timetable:\n${snapshot.error}",
+                              style: const TextStyle(color: Colors.red),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
                       if (!snapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
                       }
-                      final docs = snapshot.data!.docs;
+                      final classKeySet = _classKeys.toSet();
+                      final classNameSet = _classNames.toSet();
+                      final docs = snapshot.data!.docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        if (classKeySet.contains(data['classKey'])) {
+                          return true;
+                        }
+                        // Whole-class entry (no section picked by admin) —
+                        // applies to every section of that class.
+                        return data['appliesToAllSections'] == true &&
+                            classNameSet.contains(data['className']);
+                      }).toList();
                       docs.sort((a, b) {
                         final pa = int.tryParse(
                                 (a.data() as Map)['period'].toString()) ??

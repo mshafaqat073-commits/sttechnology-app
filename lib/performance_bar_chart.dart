@@ -56,15 +56,16 @@ class PerformanceBarChart extends StatelessWidget {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          // stretch (instead of .end) so each bar's Container gets the
+          // full `height` as a bounded constraint, which lets us use
+          // Expanded below instead of fragile hardcoded height math.
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: bars.map((b) {
             double fraction = (b.value / max).clamp(0.0, 1.0);
-            double barHeight = (height - 44) * fraction;
             return Container(
               width: 56,
               margin: const EdgeInsets.symmetric(horizontal: 6),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   Text(
                     "${b.value % 1 == 0 ? b.value.toStringAsFixed(0) : b.value.toStringAsFixed(1)}$valueSuffix",
@@ -74,15 +75,26 @@ class PerformanceBarChart extends StatelessWidget {
                         color: b.color),
                   ),
                   const SizedBox(height: 4),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 400),
-                    curve: Curves.easeOut,
-                    height: barHeight < 4 ? 4 : barHeight,
-                    width: 28,
-                    decoration: BoxDecoration(
-                      color: b.color,
-                      borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(6)),
+                  // The bar grows/shrinks inside whatever space is left
+                  // over after the value text and label — so it can
+                  // never overflow, no matter how many lines the label
+                  // wraps to or how the font scales.
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: FractionallySizedBox(
+                        heightFactor: fraction < 0.03 ? 0.03 : fraction,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 400),
+                          curve: Curves.easeOut,
+                          width: 28,
+                          decoration: BoxDecoration(
+                            color: b.color,
+                            borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(6)),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 6),

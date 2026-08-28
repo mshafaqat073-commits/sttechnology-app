@@ -409,9 +409,8 @@ class _AdmissionPageState extends State<AdmissionPage> {
                   pw.Table(
                       border: pw.TableBorder.all(color: PdfColors.black),
                       children: [
-                        _buildPdfRow("School Name", _preSchoolController.text),
-                        _buildPdfRow("Class", _selectedClass ?? "N/A"),
                         _buildPdfRow("Section", _selectedSection ?? "N/A"),
+                        _buildPdfRow("School Name", _preSchoolController.text),
                         _buildPdfRow("Reason of school leaving",
                             _leavingReasonController.text),
                       ]),
@@ -913,10 +912,6 @@ class _AdmissionPageState extends State<AdmissionPage> {
                         controller: _contactController2,
                         decoration: const InputDecoration(
                             labelText: "Contact No 2 (Optional)")),
-                    TextField(
-                        controller: _preSchoolController,
-                        decoration: const InputDecoration(
-                            labelText: "Pre School Name")),
                     DropdownButtonFormField<String>(
                       decoration: const InputDecoration(labelText: "Class"),
                       initialValue: _selectedClass,
@@ -978,6 +973,10 @@ class _AdmissionPageState extends State<AdmissionPage> {
                         controller: _addFeeController,
                         decoration:
                             const InputDecoration(labelText: "Add Fee")),
+                    TextField(
+                        controller: _preSchoolController,
+                        decoration: const InputDecoration(
+                            labelText: "Pre School Name")),
                     TextField(
                         controller: _leavingReasonController,
                         decoration: const InputDecoration(

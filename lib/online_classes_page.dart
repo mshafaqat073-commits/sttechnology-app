@@ -426,79 +426,101 @@ class _OnlineClassesPageState extends State<OnlineClassesPage> {
           final structure = structureSnap.data ?? AcademicStructure.empty;
           final allowedClasses = _allowedClasses(structure);
 
-          return Column(
-            children: [
-              // Both Admin and Teacher get the "create a new online class"
-              // form — but Teacher only ever sees the class(es)/section(s)
-              // they are actually assigned to.
-              _buildForm(structure),
-              const Divider(),
-              Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: schoolCollection('online_classes')
-                      .orderBy('scheduledAt', descending: true)
-                      .limit(100)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    var docs = snapshot.data?.docs ?? [];
+          return StreamBuilder<QuerySnapshot>(
+            stream: schoolCollection('online_classes')
+                .orderBy('scheduledAt', descending: true)
+                .limit(100)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              var docs = snapshot.data?.docs ?? [];
 
-                    // Teacher only sees online classes for the class(es)
-                    // they're assigned to; Admin sees everything.
-                    if (!widget.isAdmin) {
-                      docs = docs.where((doc) {
-                        final d = doc.data() as Map<String, dynamic>;
-                        return allowedClasses.contains(d['className']);
-                      }).toList();
-                    }
+              // Teacher only sees online classes for the class(es)
+              // they're assigned to; Admin sees everything.
+              if (!widget.isAdmin) {
+                docs = docs.where((doc) {
+                  final d = doc.data() as Map<String, dynamic>;
+                  return allowedClasses.contains(d['className']);
+                }).toList();
+              }
 
-                    if (docs.isEmpty) {
-                      return const Center(child: Text("No online classes yet."));
-                    }
-                    return ListView.builder(
-                      itemCount: docs.length,
-                      itemBuilder: (context, i) {
-                        final doc = docs[i];
-                        final d = doc.data() as Map<String, dynamic>;
-                        final ts = (d['scheduledAt'] as Timestamp?)?.toDate();
-                        final title = d['title'] ?? '';
-                        return Card(
-                          margin: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
-                          child: ListTile(
-                            leading: const Icon(Icons.video_camera_front,
-                                color: Colors.teal),
-                            title: Text(title),
-                            subtitle: Text(
-                                "${d['className']} ${(d['section'] ?? '').toString().isEmpty ? '(all sections)' : d['section']} • ${d['platform']}\n"
-                                "${ts != null ? fmt.format(ts) : ''} • By ${d['createdByName'] ?? ''}"),
-                            isThreeLine: true,
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                ElevatedButton(
-                                  onPressed: () => _joinLink(d['link'] ?? ''),
-                                  child: const Text("Join"),
-                                ),
-                                if (widget.isAdmin)
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.red),
-                                    tooltip: "Delete",
-                                    onPressed: () =>
-                                        _confirmDelete(doc.reference, title),
+              // Everything — the form AND the list — lives inside a single
+              // CustomScrollView now, instead of a fixed-height Column with
+              // the form as a non-scrollable child above an Expanded list.
+              // That old layout is what caused "bottom overflowed by N
+              // pixels": the form Card alone (title/subject/two dropdowns/
+              // platform/link/date button/submit button) is tall, and as
+              // soon as the keyboard opened for any of its TextFields the
+              // available height shrank below the form's fixed height,
+              // which the Column couldn't absorb. Making the whole page one
+              // scroll view means there's always enough room — it just
+              // scrolls instead of overflowing.
+              return CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Column(
+                      children: [
+                        // Both Admin and Teacher get the "create a new
+                        // online class" form — but Teacher only ever sees
+                        // the class(es)/section(s) they are actually
+                        // assigned to.
+                        _buildForm(structure),
+                        const Divider(),
+                      ],
+                    ),
+                  ),
+                  if (docs.isEmpty)
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(child: Text("No online classes yet.")),
+                    )
+                  else
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, i) {
+                          final doc = docs[i];
+                          final d = doc.data() as Map<String, dynamic>;
+                          final ts = (d['scheduledAt'] as Timestamp?)?.toDate();
+                          final title = d['title'] ?? '';
+                          return Card(
+                            margin: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            child: ListTile(
+                              leading: const Icon(Icons.video_camera_front,
+                                  color: Colors.teal),
+                              title: Text(title),
+                              subtitle: Text(
+                                  "${d['className']} ${(d['section'] ?? '').toString().isEmpty ? '(all sections)' : d['section']} • ${d['platform']}\n"
+                                  "${ts != null ? fmt.format(ts) : ''} • By ${d['createdByName'] ?? ''}"),
+                              isThreeLine: true,
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ElevatedButton(
+                                    onPressed: () => _joinLink(d['link'] ?? ''),
+                                    child: const Text("Join"),
                                   ),
-                              ],
+                                  if (widget.isAdmin)
+                                    IconButton(
+                                      icon: const Icon(Icons.delete,
+                                          color: Colors.red),
+                                      tooltip: "Delete",
+                                      onPressed: () =>
+                                          _confirmDelete(doc.reference, title),
+                                    ),
+                                ],
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
+                          );
+                        },
+                        childCount: docs.length,
+                      ),
+                    ),
+                ],
+              );
+            },
           );
         },
       )),

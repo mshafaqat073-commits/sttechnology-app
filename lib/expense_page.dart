@@ -63,25 +63,36 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   Future<void> _submitExpense() async {
     if (_nameController.text.isEmpty) return;
+    if (_isSaving) return;
     if (!await SubscriptionGuard.ensureActive(context)) return;
-    final staff = _selectedStaffId == null
-        ? null
-        : _staffList.firstWhere((s) => s['id'] == _selectedStaffId);
-    await schoolCollection('expenses').add({
-      'name': _nameController.text,
-      'total': double.tryParse(_totalController.text) ?? 0,
-      'paid': double.tryParse(_paidController.text) ?? 0,
-      'remaining': _remaining,
-      'description': _descController.text,
-      'date': Timestamp.fromDate(_selectedDate),
-      'expenseType': _expenseType,
-      'staffId': _expenseType == 'Staff Salary' ? _selectedStaffId : null,
-      'staffName': _expenseType == 'Staff Salary' ? (staff?['name']) : null,
-    });
-    Navigator.pop(context);
+    setState(() => _isSaving = true);
+    try {
+      final staff = _selectedStaffId == null
+          ? null
+          : _staffList.firstWhere((s) => s['id'] == _selectedStaffId);
+      await schoolCollection('expenses').add({
+        'name': _nameController.text,
+        'total': double.tryParse(_totalController.text) ?? 0,
+        'paid': double.tryParse(_paidController.text) ?? 0,
+        'remaining': _remaining,
+        'description': _descController.text,
+        'date': Timestamp.fromDate(_selectedDate),
+        'expenseType': _expenseType,
+        'staffId': _expenseType == 'Staff Salary' ? _selectedStaffId : null,
+        'staffName': _expenseType == 'Staff Salary' ? (staff?['name']) : null,
+      });
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
-  final bool _isSaving = false;
+  bool _isSaving = false;
   @override
   Widget build(BuildContext context) {
     return Scaffold(

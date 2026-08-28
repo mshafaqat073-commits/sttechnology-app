@@ -27,8 +27,7 @@ pw.TableRow _buildPdfRow(String label, String value) {
     pw.Padding(
         padding: const pw.EdgeInsets.all(4),
         child: pw.Text(label,
-            style:
-                pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10))),
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10))),
     pw.Padding(
         padding: const pw.EdgeInsets.all(4),
         child: pw.Text(value, style: const pw.TextStyle(fontSize: 10))),
@@ -103,7 +102,8 @@ Future<Uint8List> buildAdmissionFormPdfBytes(
                       _buildPdfRow("Name of candidate", name),
                       _buildPdfRow(
                           "Student C.N.I.C.", _s(studentData, 'sCNIC', '')),
-                      _buildPdfRow("Father's Name", _s(studentData, 'fName', '')),
+                      _buildPdfRow(
+                          "Father's Name", _s(studentData, 'fName', '')),
                       _buildPdfRow(
                           "Father's C.N.I.C.", _s(studentData, 'fCNIC', '')),
                       _buildPdfRow(
@@ -112,6 +112,8 @@ Future<Uint8List> buildAdmissionFormPdfBytes(
                       _buildPdfRow("District", _s(studentData, 'district', '')),
                       _buildPdfRow("Religion", _s(studentData, 'religion', '')),
                       _buildPdfRow("Gender", _s(studentData, 'gender')),
+                      _buildPdfRow("Class", studentClass),
+                      _buildPdfRow("Section", section),
                       _buildPdfRow(
                           "Contact no. 1", _s(studentData, 'contactNo', '')),
                       _buildPdfRow(
@@ -126,8 +128,6 @@ Future<Uint8List> buildAdmissionFormPdfBytes(
                     children: [
                       _buildPdfRow(
                           "School Name", _s(studentData, 'preSchool', '')),
-                      _buildPdfRow("Class", studentClass),
-                      _buildPdfRow("Section", section),
                       _buildPdfRow("Reason of school leaving",
                           _s(studentData, 'leavingReason', '')),
                     ]),
