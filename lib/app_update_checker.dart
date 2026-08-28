@@ -16,9 +16,8 @@
 //
 // 1) In pubspec.yaml -> dependencies, add:
 //      dio: ^5.7.0
-//      open_filex: ^4.5.0
-//      package_info_plus: ^8.0.0
-//      path_provider: ^2.1.0   (already in this project)
+//      (package_info_plus, path_provider, and open_file are already
+//      in this project)
 //
 //    Then run: flutter pub get
 //
@@ -30,7 +29,7 @@
 //    (INTERNET permission should already be present:
 //      <uses-permission android:name="android.permission.INTERNET" /> )
 //
-//    open_filex registers its own FileProvider automatically, so you
+//    open_file registers its own FileProvider automatically, so you
 //    do NOT need to add a <provider> entry yourself.
 //
 // 3) In main.dart, wrap AppUpdateChecker around MaterialApp's
@@ -76,7 +75,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:open_filex/open_filex.dart';
+import 'package:open_file/open_file.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -333,7 +332,7 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
 
       // Download complete — open the installer/APK so the user can go
       // straight to "Install".
-      final result = await OpenFilex.open(savePath);
+      final result = await OpenFile.open(savePath);
       if (result.type != ResultType.done && mounted) {
         _snack(
           'Download finished but the install screen could not open '

@@ -39,6 +39,7 @@ dependencies:
   mobile_scanner: ^6.0.2
   package_info_plus: ^8.0.0
   open_file: ^3.3.2
+  dio: ^5.7.0
 
 dev_dependencies:
   flutter_test:

@@ -105,8 +105,18 @@ class _SuperAdminSubscriptionPageState
         backgroundColor: Colors.deepPurple,
         bottom: TabBar(
           controller: _tabController,
+          // Both selected and unselected tab labels stay fully white,
+          // rather than dimming the unselected one to white70.
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white,
+          indicatorColor: Colors.white,
           tabs: [
-            const Tab(text: "Schools"),
+            const Tab(
+              child: Text(
+                "Schools",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
             Tab(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
@@ -115,9 +125,12 @@ class _SuperAdminSubscriptionPageState
                     .snapshots(),
                 builder: (context, snap) {
                   final count = snap.data?.docs.length ?? 0;
-                  return Text(count > 0
-                      ? "Payment Requests ($count)"
-                      : "Payment Requests");
+                  return Text(
+                    count > 0
+                        ? "Payment Requests ($count)"
+                        : "Payment Requests",
+                    style: const TextStyle(color: Colors.white),
+                  );
                 },
               ),
             ),
@@ -164,17 +177,20 @@ class _SuperAdminSubscriptionPageState
                     : Colors.green;
 
             return Card(
+              color: Colors.white,
               margin: const EdgeInsets.symmetric(vertical: 6),
               child: ListTile(
                 title: Text(
                   (data['schoolName'] as String?) ?? doc.id,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, color: Colors.black87),
                 ),
                 subtitle: Text(
                   endDate == null
                       ? "No subscription data yet"
                       : "Status: $status | Ends: ${endDate.toLocal().toString().split(' ').first}"
                           "${expired ? ' (EXPIRED)' : (daysLeft != null ? ' ($daysLeft days left)' : '')}",
+                  style: const TextStyle(color: Colors.black54),
                 ),
                 leading: CircleAvatar(
                   backgroundColor: chipColor,
@@ -201,8 +217,47 @@ class _SuperAdminSubscriptionPageState
           .orderBy('requestedAt', descending: true)
           .snapshots(),
       builder: (context, snap) {
+        if (snap.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 40),
+                  const SizedBox(height: 12),
+                  const Text(
+                    "Couldn't load payment requests.",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "${snap.error}",
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    "This usually means Firestore needs a composite index for "
+                    "this query (status + requestedAt). Check your debug "
+                    "console logs for a link to create it automatically, or "
+                    "add it manually in Firebase Console > Firestore > Indexes.",
+                    style: TextStyle(fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: () => setState(() {}),
+                    child: const Text("Retry"),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
         if (!snap.hasData) {
-          return const Center(child: CircularProgressIndicator());
+          return _LoadingWithTimeoutHint(onRetry: () => setState(() {}));
         }
         final docs = snap.data!.docs;
         if (docs.isEmpty) {
@@ -224,6 +279,7 @@ class _SuperAdminSubscriptionPageState
                 : '';
 
             return Card(
+              color: Colors.white,
               margin: const EdgeInsets.symmetric(vertical: 8),
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -232,14 +288,19 @@ class _SuperAdminSubscriptionPageState
                   children: [
                     Text(schoolName,
                         style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16)),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.black87)),
                     Text("Submitted: $date",
                         style: const TextStyle(
                             fontSize: 12, color: Colors.black54)),
                     if (note.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
-                        child: Text("Ref: $note"),
+                        child: Text(
+                          "Ref: $note",
+                          style: const TextStyle(color: Colors.black87),
+                        ),
                       ),
                     const SizedBox(height: 8),
                     if (screenshotUrl.isNotEmpty)
@@ -302,11 +363,14 @@ class _SuperAdminSubscriptionPageState
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: Text("Extend: $schoolName"),
+          backgroundColor: Colors.white,
+          title: Text("Extend: $schoolName",
+              style: const TextStyle(color: Colors.black87)),
           content: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("Extend by (days): "),
+              const Text("Extend by (days): ",
+                  style: TextStyle(color: Colors.black87)),
               const SizedBox(width: 10),
               DropdownButton<int>(
                 value: days,
@@ -357,9 +421,13 @@ class _SuperAdminSubscriptionPageState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("Reject $schoolName's request?"),
+        backgroundColor: Colors.white,
+        title: Text("Reject $schoolName's request?",
+            style: const TextStyle(color: Colors.black87)),
         content: const Text(
-            "The school will see this request marked as rejected."),
+          "The school will see this request marked as rejected.",
+          style: TextStyle(color: Colors.black87),
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -395,11 +463,14 @@ class _SuperAdminSubscriptionPageState
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: Text("Approve: $schoolName"),
+          backgroundColor: Colors.white,
+          title: Text("Approve: $schoolName",
+              style: const TextStyle(color: Colors.black87)),
           content: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("Extend by (days): "),
+              const Text("Extend by (days): ",
+                  style: TextStyle(color: Colors.black87)),
               const SizedBox(width: 10),
               DropdownButton<int>(
                 value: days,
@@ -458,5 +529,62 @@ class _SuperAdminSubscriptionPageState
     } else {
       setState(() => _error = "Wrong password");
     }
+  }
+}
+
+/// A loading spinner that stops spinning silently forever: if the stream
+/// hasn't delivered any data after a few seconds (most commonly because a
+/// newly created Firestore composite index is still "Building"), this
+/// swaps to a message explaining why and a manual Retry button, instead of
+/// leaving the user staring at an endless spinner with no explanation.
+class _LoadingWithTimeoutHint extends StatefulWidget {
+  const _LoadingWithTimeoutHint({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  State<_LoadingWithTimeoutHint> createState() =>
+      _LoadingWithTimeoutHintState();
+}
+
+class _LoadingWithTimeoutHintState extends State<_LoadingWithTimeoutHint> {
+  bool _showHint = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 8), () {
+      if (mounted) setState(() => _showHint = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            if (_showHint) ...[
+              const SizedBox(height: 16),
+              const Text(
+                "Still loading. If you just created a Firestore index, "
+                "it can take a few minutes to finish building before "
+                "this list appears.",
+                style: TextStyle(fontSize: 12, color: Colors.black54),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: widget.onRetry,
+                child: const Text("Retry"),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }

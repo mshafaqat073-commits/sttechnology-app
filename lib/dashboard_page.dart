@@ -65,68 +65,109 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         backgroundColor: Colors.teal[800],
         actions: [
-          IconButton(
-            icon: const Icon(Icons.system_update_alt, color: Colors.white),
-            tooltip: "Check for Update",
-            onPressed: () => AppUpdateChecker.of(context)
-                ?.checkForUpdate(showResult: true),
-          ),
-          IconButton(
-            icon: const Icon(Icons.campaign, color: Colors.yellowAccent),
-            tooltip: "Manage Notifications",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ManageNotificationsPage(),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.groups_2, color: Colors.yellowAccent),
-            tooltip: "Teacher Notifications",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ManageTeacherNotificationsPage(),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.auto_awesome, color: Colors.yellowAccent),
-            tooltip: "AI Assistant",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AIChatPage(role: 'admin'),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            color: Colors.red,
-            onPressed: () async {
-              // Pehle Firebase Auth session khatam karo aur school
-              // context clear karo — warna authStateChanges() ko user
-              // abhi bhi "logged in" nazar aata hai, aur agli baar app
-              // khulte hi Role Selector ki bajaye seedha isi admin
-              // dashboard par chala jata hai (settings_page.dart ka
-              // _logout() isi tarah karta hai, yahan bhi wahi pattern).
-              await FirebaseAuth.instance.signOut();
-              SchoolContext.clear();
-              if (context.mounted) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginPage()),
-                  (route) => false,
-                );
+          // All account/dashboard actions live under a single menu button,
+          // opened as a dropdown list, instead of a row of separate icons.
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            tooltip: "Menu",
+            onSelected: (value) async {
+              switch (value) {
+                case 'notifications':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ManageNotificationsPage(),
+                    ),
+                  );
+                  break;
+                case 'teacher_notifications':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          const ManageTeacherNotificationsPage(),
+                    ),
+                  );
+                  break;
+                case 'ai_assistant':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AIChatPage(role: 'admin'),
+                    ),
+                  );
+                  break;
+                case 'check_update':
+                  AppUpdateChecker.of(context)
+                      ?.checkForUpdate(showResult: true);
+                  break;
+                case 'logout':
+                  // Sign out of the Firebase Auth session and clear the
+                  // school context first — otherwise authStateChanges()
+                  // still reports the user as "logged in", and the next
+                  // time the app opens it jumps straight back into this
+                  // admin dashboard instead of the Role Selector
+                  // (settings_page.dart's _logout() follows this same
+                  // pattern).
+                  await FirebaseAuth.instance.signOut();
+                  SchoolContext.clear();
+                  if (context.mounted) {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const LoginPage()),
+                      (route) => false,
+                    );
+                  }
+                  break;
               }
             },
+            itemBuilder: (context) => const [
+              // Notification-related actions grouped first, ordered by
+              // audience reach (all-school notice before the narrower
+              // teacher notice).
+              PopupMenuItem(
+                value: 'notifications',
+                child: ListTile(
+                  leading: Icon(Icons.campaign),
+                  title: Text("Manage Notifications"),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'teacher_notifications',
+                child: ListTile(
+                  leading: Icon(Icons.groups_2),
+                  title: Text("Teacher Notifications"),
+                ),
+              ),
+              // AI Assistant: a feature action, placed after notifications.
+              PopupMenuItem(
+                value: 'ai_assistant',
+                child: ListTile(
+                  leading: Icon(Icons.auto_awesome),
+                  title: Text("AI Assistant"),
+                ),
+              ),
+              // System/maintenance action, placed just before account
+              // actions.
+              PopupMenuItem(
+                value: 'check_update',
+                child: ListTile(
+                  leading: Icon(Icons.system_update_alt),
+                  title: Text("Check for Update"),
+                ),
+              ),
+              PopupMenuDivider(),
+              // Account action (logout) always sits last, separated by a
+              // divider, to avoid accidental taps.
+              PopupMenuItem(
+                value: 'logout',
+                child: ListTile(
+                  leading: Icon(Icons.logout, color: Colors.red),
+                  title: Text("Logout", style: TextStyle(color: Colors.red)),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -180,9 +221,10 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
                 child: Column(
                   children: [
-                    // settings/global doc ke 'schoolName' field se live
-                    // school naam nikalta he (Settings > School Name se
-                    // set hota he) — agar set nahi ho to fallback "AEP".
+                    // Reads the live school name from the 'schoolName'
+                    // field of the settings/global doc (set via
+                    // Settings > School Name) — falls back to "AEP" if
+                    // it hasn't been set.
                     StreamBuilder<DocumentSnapshot>(
                       stream: schoolCollection('settings')
                           .doc('global')
@@ -219,15 +261,15 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               Expanded(
                 child: Center(
-                  // Wide desktop/web screens ke liye grid ko center mein
-                  // rakhne ke liye max width — warna cards edge-to-edge
-                  // poori screen tak stretch ho jate hain (role selector
-                  // page pehle se hi is tarah constrained hai).
+                  // Max width keeps the grid centered on wide desktop/web
+                  // screens — otherwise the cards stretch edge-to-edge
+                  // across the whole screen (the role selector page is
+                  // already constrained the same way).
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1100),
                     child: ResponsiveGrid(
                   children: [
-                    // --- Sab se zyada roz istemal hone wale ---
+                    // --- Most frequently used, day-to-day ---
                     _dashboardCard(context, Icons.app_registration, "Admission",
                         Colors.purple),
                     _dashboardCard(
@@ -240,13 +282,13 @@ class _DashboardPageState extends State<DashboardPage> {
                     _dashboardCard(
                         context, Icons.analytics, "Result", Colors.orange),
 
-                    // --- Roz-marra ke doosre academic tools ---
+                    // --- Other everyday academic tools ---
                     _dashboardCard(
                         context, Icons.task_alt, "Home Task", Colors.cyan),
                     _dashboardCard(context, Icons.schedule, "Timetable",
                         Colors.deepOrange),
 
-                    // --- Financial (Fee ke baaki cheezein) ---
+                    // --- Financial (remaining fee-related items) ---
                     _dashboardCard(context, Icons.receipt_long,
                         "Online Payments", Colors.lightGreen),
                     _dashboardCard(context, Icons.video_call, "Online Classes",
@@ -259,7 +301,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         context, Icons.cake, "Birthdays", Colors.pink),
                     _dashboardCard(context, Icons.badge, "Staff", Colors.brown),
 
-                    // --- Tools / utilities (kam istemal hone wale) ---
+                    // --- Tools / utilities (less frequently used) ---
                     _dashboardCard(
                         context, Icons.quiz, "Ai Paper Maker", Colors.pink),
                     _dashboardCard(context, Icons.credit_card, "Card Generator",
@@ -268,7 +310,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         Colors.deepPurple),
                     _dashboardCard(context, Icons.trending_up, "Profit/Loss",
                         Colors.indigo),
-                    // --- Communication / Admin actions ---
+                    // --- Communication / admin actions ---
                     _dashboardCard(context, Icons.report_problem, "Complaints",
                         Colors.deepOrange),
                     _dashboardCard(context, Icons.event_note, "Events",
@@ -278,7 +320,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     _dashboardCard(context, Icons.phone_android, "App Usage",
                         Colors.pinkAccent),
 
-                    // --- Settings hamesha sab se aakhir mein ---
+                    // --- Settings always goes last ---
                     _dashboardCard(
                         context, Icons.settings, "Settings", Colors.grey),
                   ],

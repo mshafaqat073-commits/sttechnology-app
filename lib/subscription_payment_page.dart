@@ -269,6 +269,27 @@ class _SubscriptionPaymentPageState extends State<SubscriptionPaymentPage> {
                 .limit(5)
                 .snapshots(),
             builder: (context, snap) {
+              if (snap.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Couldn't load your requests.",
+                        style: TextStyle(
+                            color: Colors.red, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "${snap.error}",
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                );
+              }
               if (!snap.hasData) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
