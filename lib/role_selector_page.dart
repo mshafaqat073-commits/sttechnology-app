@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'login_page.dart';
 import 'teacher_login_page.dart';
 import 'parent_login_page.dart';
-import 'school_branding.dart';
 import 'super_admin_subscription_page.dart';
 
 /// When no user is logged in, this screen shows first — from here
@@ -126,7 +125,14 @@ class _RoleSelectorPageState extends State<RoleSelectorPage>
                     ),
                     const SizedBox(height: 18),
                     const Center(
-                      child: SchoolNameText(
+                      // This is a pre-login screen shown before any school
+                      // has signed in, and this software is distributed as
+                      // a product to many schools — so this always shows
+                      // the company name, never a particular school's own
+                      // name (that only appears after login, starting on
+                      // the Admin Login screen).
+                      child: Text(
+                        'ST School Management',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 24,

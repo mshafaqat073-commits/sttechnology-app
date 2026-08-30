@@ -20,11 +20,12 @@ import 'school_context.dart';
 import 'school_branding.dart';
 import 'subscription_service.dart';
 import 'subscription_payment_page.dart';
+import 'reset_data_page.dart';
 
 // Backup, Reset, and Import all share this one collection list so a
 // collection can never accidentally be left out of one of them.
 // Add new collections here only.
-const List<String> _managedCollections = [
+const List<String> kManagedCollections = [
   'students',
   'fee_structures',
   'fee_history',
@@ -41,6 +42,7 @@ const List<String> _managedCollections = [
   'school_events',
   'school_homework',
   'special_messages',
+  'student_issues',
   'teacher_attendance',
   'notifications',
   'app_settings',
@@ -56,6 +58,62 @@ const List<String> _managedCollections = [
   'online_classes',
   'push_notifications',
 ];
+
+// Human-readable label for each entry in kManagedCollections — shown on
+// the Reset Data page so the admin can tell what each category actually
+// is, instead of reading the raw Firestore collection name.
+const Map<String, String> kCollectionDisplayNames = {
+  'students': 'Students',
+  'fee_structures': 'Fee Structures',
+  'fee_history': 'Fee History',
+  'fee_payments': 'Fee Payments',
+  'results': 'Results',
+  'expenses': 'Expenses',
+  'SLC': 'School Leaving Certificates (SLC)',
+  'staff': 'Staff',
+  'teachers': 'Teachers',
+  'attendance': 'Student Attendance',
+  'counters': 'ID Counters',
+  'other_incomes': 'Other Income Records',
+  'school_diary': 'School Diary',
+  'school_events': 'School Events',
+  'school_homework': 'Homework',
+  'special_messages': 'Special Messages',
+  'student_issues': 'Student Issues (Individual Messages)',
+  'teacher_attendance': 'Teacher Attendance',
+  'notifications': 'Notifications',
+  'app_settings': 'App Settings',
+  'bulk_fee_operations': 'Bulk Fee Operations',
+  'settings': 'School Settings',
+  'teacher_notifications': 'Teacher Notifications',
+  'notification_queue': 'Notification Queue',
+  'timetable': 'Timetable',
+  'documents': 'Documents',
+  'complaints': 'Complaints',
+  'fine_history': 'Fine History',
+  'leave_applications': 'Leave Applications',
+  'online_classes': 'Online Classes',
+  'push_notifications': 'Push Notifications',
+};
+
+// Deletes every document in one collection (under the current school),
+// in batches of 450 (Firestore's batch limit is 500). Shared by both the
+// "reset everything at once" flow and the "reset just this one category"
+// flow on the Reset Data page, so there is only one place that actually
+// performs a delete.
+Future<void> resetSingleCollection(String collectionName) async {
+  final db = FirebaseFirestore.instance;
+  const batchSize = 450;
+  final snapshot = await schoolCollection(collectionName).get();
+  for (var i = 0; i < snapshot.docs.length; i += batchSize) {
+    final batch = db.batch();
+    final chunk = snapshot.docs.skip(i).take(batchSize);
+    for (var doc in chunk) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+  }
+}
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -458,7 +516,7 @@ class _SettingsPageState extends State<SettingsPage> {
       '_meta': {
         'app': currentSchoolDisplayName(),
         'exportedAt': DateTime.now().toIso8601String(),
-        'collections': _managedCollections,
+        'collections': kManagedCollections,
       },
     };
 
@@ -466,10 +524,10 @@ class _SettingsPageState extends State<SettingsPage> {
     // sequential round-trips add several seconds of pure network wait
     // regardless of how little data each collection has.
     final allSnapshots = await Future.wait(
-      _managedCollections.map((coll) => schoolCollection(coll).get()),
+      kManagedCollections.map((coll) => schoolCollection(coll).get()),
     );
 
-    for (var i = 0; i < _managedCollections.length; i++) {
+    for (var i = 0; i < kManagedCollections.length; i++) {
       var snapshot = allSnapshots[i];
       List<Map<String, dynamic>> collectionData = snapshot.docs.map((doc) {
         Map<String, dynamic> d = Map<String, dynamic>.from(doc.data());
@@ -477,7 +535,7 @@ class _SettingsPageState extends State<SettingsPage> {
         return _encodeForBackup(d) as Map<String, dynamic>;
       }).toList();
 
-      fullBackup[_managedCollections[i]] = collectionData;
+      fullBackup[kManagedCollections[i]] = collectionData;
     }
 
     return fullBackup;
@@ -492,11 +550,11 @@ class _SettingsPageState extends State<SettingsPage> {
     final defaultSheetName = workbook.getDefaultSheet();
 
     final allSnapshots = await Future.wait(
-      _managedCollections.map((coll) => schoolCollection(coll).get()),
+      kManagedCollections.map((coll) => schoolCollection(coll).get()),
     );
 
-    for (var i = 0; i < _managedCollections.length; i++) {
-      final coll = _managedCollections[i];
+    for (var i = 0; i < kManagedCollections.length; i++) {
+      final coll = kManagedCollections[i];
       var snapshot = allSnapshots[i];
       if (snapshot.docs.isEmpty) continue;
 
@@ -657,42 +715,6 @@ class _SettingsPageState extends State<SettingsPage> {
         );
       }
     }
-  }
-
-  // 4. Reset Data
-  Future<void> _performReset({
-    void Function(int done, int total)? onProgress,
-  }) async {
-    var db = FirebaseFirestore.instance;
-    const batchSize = 450;
-    final total = _managedCollections.length;
-    int done = 0;
-
-    // Fetch + delete each collection independently and run all 28 of
-    // these jobs in PARALLEL. Previously only the fetch step ran in
-    // parallel — the delete step looped over collections one at a time,
-    // so a single collection with a lot of accumulated data (e.g.
-    // attendance/notification logs, even if `students` itself only has
-    // a handful of docs) made every other, mostly-empty collection wait
-    // its turn before being cleared. Deleting all collections
-    // concurrently removes that bottleneck.
-    Future<void> deleteCollection(String coll) async {
-      var snapshot = await schoolCollection(coll).get();
-      // Batched delete (max 500 ops per batch) — faster and safer than
-      // deleting one document at a time for large collections.
-      for (var i = 0; i < snapshot.docs.length; i += batchSize) {
-        final batch = db.batch();
-        final chunk = snapshot.docs.skip(i).take(batchSize);
-        for (var doc in chunk) {
-          batch.delete(doc.reference);
-        }
-        await batch.commit();
-      }
-      done++;
-      onProgress?.call(done, total);
-    }
-
-    await Future.wait(_managedCollections.map(deleteCollection));
   }
 
   // Resolves the app's permanent "documents" folder. On Windows this is
@@ -962,7 +984,7 @@ class _SettingsPageState extends State<SettingsPage> {
       var db = FirebaseFirestore.instance;
       const batchSize = 450;
 
-      for (String coll in _managedCollections) {
+      for (String coll in kManagedCollections) {
         if (!backup.containsKey(coll)) continue;
         List<dynamic> docsRaw = backup[coll] ?? [];
         if (docsRaw.isEmpty && mode != 'replace') continue;
@@ -1014,106 +1036,6 @@ class _SettingsPageState extends State<SettingsPage> {
         );
       }
     }
-  }
-
-  void _showResetDialog() {
-    // The State's own context — stays valid for as long as this widget
-    // is mounted. Captured once here so the async work below (after the
-    // confirm dialog is already popped) has a context that's guaranteed
-    // to still be attached to the tree, instead of reusing a dialog's
-    // own builder context after that dialog has closed.
-    final rootContext = context;
-
-    showDialog(
-        context: rootContext,
-        builder: (dialogContext) => AlertDialog(
-              title: const Text("Reset Database",
-                  style: TextStyle(color: Colors.red)),
-              content: const Text(
-                  "Warning: do you want to delete ALL data? This action cannot be undone."),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: const Text("Cancel")),
-                TextButton(
-                    onPressed: () async {
-                      Navigator.pop(dialogContext); // close confirmation dialog
-
-                      // Live progress ("N / total collections cleared")
-                      // instead of a static spinner, so it's clear the
-                      // reset is actually moving rather than stuck.
-                      final progress = ValueNotifier<int>(0);
-                      final total = _managedCollections.length;
-                      // Capture the messenger up front, from the stable
-                      // root context (see note on rootContext above) —
-                      // avoids looking a context up again after the
-                      // async gap below.
-                      final messenger = ScaffoldMessenger.of(rootContext);
-
-                      showDialog(
-                        context: rootContext,
-                        barrierDismissible: false,
-                        builder: (context) => AlertDialog(
-                          content: ValueListenableBuilder<int>(
-                            valueListenable: progress,
-                            builder: (context, done, _) => Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const CircularProgressIndicator(),
-                                    const SizedBox(width: 20),
-                                    Expanded(
-                                        child: Text(
-                                            "Resetting database... ($done/$total)")),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                LinearProgressIndicator(
-                                  value: total == 0 ? 0 : done / total,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-
-                      try {
-                        await _performReset(
-                          onProgress: (done, total) => progress.value = done,
-                        );
-                        if (mounted) {
-                          // Pop via the stable rootContext's navigator —
-                          // not a context tied to a dialog that's mid
-                          // teardown, which is what let this silently
-                          // fail to close before.
-                          Navigator.of(rootContext, rootNavigator: true)
-                              .pop(); // close progress dialog
-                          messenger.showSnackBar(
-                            const SnackBar(
-                                content: Text("Database Reset Successfully!"),
-                                backgroundColor: Colors.teal),
-                          );
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          Navigator.of(rootContext, rootNavigator: true)
-                              .pop(); // close progress dialog
-                          messenger.showSnackBar(
-                            SnackBar(
-                                content: Text("Reset Error: $e"),
-                                backgroundColor: Colors.red),
-                          );
-                        }
-                      } finally {
-                        progress.dispose();
-                      }
-                    },
-                    child: const Text("Delete All",
-                        style: TextStyle(color: Colors.red))),
-              ],
-            ));
   }
 
   // The whole flow for renewing a subscription is now in
@@ -1435,9 +1357,12 @@ class _SettingsPageState extends State<SettingsPage> {
               onTap: _showRestoreFromAutoBackupDialog),
           ListTile(
               leading: const Icon(Icons.refresh, color: Colors.red),
-              title: const Text("Reset All Data",
+              title: const Text("Reset Data",
                   style: TextStyle(color: Colors.red)),
-              onTap: _showResetDialog),
+              subtitle: const Text(
+                  "Reset everything at once, or reset one category at a time"),
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ResetDataPage()))),
           const Divider(),
           ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),

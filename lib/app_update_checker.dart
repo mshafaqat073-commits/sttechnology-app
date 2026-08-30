@@ -204,9 +204,23 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
       final currentVersion = info.version; // e.g. "1.4.2"
       debugPrint('[UpdateChecker] Installed app version: $currentVersion');
 
-      final res = await http
-          .get(Uri.parse(kVersionCheckUrl))
-          .timeout(const Duration(seconds: 8));
+      // Cache-busting query param + no-cache headers: Netlify's CDN can
+      // keep serving an old cached copy of version.json for a while after
+      // a new one is deployed. Without this, a device can compare the
+      // freshly-installed app against a stale response and be told an
+      // update is available again even though it just updated.
+      final versionCheckUri = Uri.parse(kVersionCheckUrl).replace(
+        queryParameters: {
+          't': DateTime.now().millisecondsSinceEpoch.toString(),
+        },
+      );
+      final res = await http.get(
+        versionCheckUri,
+        headers: const {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+      ).timeout(const Duration(seconds: 8));
       debugPrint('[UpdateChecker] version.json fetch status: ${res.statusCode}');
       if (res.statusCode != 200) {
         debugPrint('[UpdateChecker] Non-200 response, aborting.');
@@ -334,10 +348,15 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
     await prefs.remove(kPrefLastPromptedAtMs);
   }
 
-  /// Simple semantic-version comparison, e.g. "1.4.10" vs "1.4.2".
+  /// Simple semantic-version comparison, e.g. "1.4.10" vs "1.4.2". Also
+  /// strips any build-metadata suffix (e.g. "1.0.1+3" -> "1.0.1") before
+  /// comparing, since some platforms can report the build number appended
+  /// to the version string.
   bool _isNewer(String latest, String current) {
-    final l = latest.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-    final c = current.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final cleanLatest = latest.split('+').first;
+    final cleanCurrent = current.split('+').first;
+    final l = cleanLatest.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final c = cleanCurrent.split('.').map((e) => int.tryParse(e) ?? 0).toList();
     final len = l.length > c.length ? l.length : c.length;
     for (var i = 0; i < len; i++) {
       final lv = i < l.length ? l[i] : 0;

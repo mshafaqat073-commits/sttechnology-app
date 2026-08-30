@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:image_picker/image_picker.dart';
 import 'notification_helper.dart';
 import 'school_context.dart';
@@ -26,8 +26,13 @@ import 'school_context.dart';
 // Fields written: studentId, studentName, class, section, message,
 // imageUrl, date, dateString, postedBy.
 //
-// Requires these packages in pubspec.yaml (add if not already present):
-//   firebase_storage: ^11.0.0
+// The attached photo is uploaded to Cloudinary (same account/preset used
+// throughout this project — see settings_page.dart / student_detail_page.dart /
+// document_management_page.dart), under the 'student_issues' folder, not
+// Firebase Storage.
+//
+// Requires this package in pubspec.yaml (add if not already present):
+//   cloudinary_public: ^0.23.1
 //   image_picker: ^1.0.0
 // -----------------------------------------------------------------------
 
@@ -233,17 +238,18 @@ class _StudentIssuePageState extends State<StudentIssuePage> {
   }
 
   Future<String?> _uploadImageIfAny(String studentId) async {
-    if (_pickedImageBytes == null) return null;
-    final ref = FirebaseStorage.instance
-        .ref()
-        .child('student_issues')
-        .child(studentId)
-        .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
-    final uploadTask = await ref.putData(
-      _pickedImageBytes!,
-      SettableMetadata(contentType: 'image/jpeg'),
+    if (_pickedImageFile == null) return null;
+    // Same Cloudinary account/preset used elsewhere in this project (e.g.
+    // student_detail_page.dart, settings_page.dart), just its own folder.
+    final cloudinary = CloudinaryPublic('niilo9ek', 'shafi073', cache: false);
+    final response = await cloudinary.uploadFile(
+      CloudinaryFile.fromFile(
+        _pickedImageFile!.path,
+        resourceType: CloudinaryResourceType.Image,
+        folder: 'student_issues',
+      ),
     );
-    return await uploadTask.ref.getDownloadURL();
+    return response.secureUrl;
   }
 
   Future<void> _sendIssue() async {
@@ -530,6 +536,55 @@ class ReportStudentIssueButton extends StatelessWidget {
 // as a 4th tab (or a section) inside ParentHomeTaskPage, passing the
 // child's own document id from the students collection.
 // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// Opens the attached photo full-screen with pinch-to-zoom, so a parent
+// can tap the small thumbnail on a Student Issue and actually see the
+// picture clearly instead of only the cropped 180px preview.
+// -----------------------------------------------------------------------
+void _showFullScreenIssueImage(BuildContext context, String imageUrl) {
+  showDialog(
+    context: context,
+    builder: (ctx) => Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      backgroundColor: Colors.black,
+      child: Stack(
+        children: [
+          SizedBox.expand(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4,
+              child: Center(
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stack) => const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      "Could not load image.",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: CircleAvatar(
+              backgroundColor: Colors.black54,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class StudentIssuesParentList extends StatelessWidget {
   final String studentId;
 
@@ -591,24 +646,27 @@ class StudentIssuesParentList extends StatelessWidget {
                     Text(data['message']?.toString() ?? ''),
                     if (imageUrl != null && imageUrl.isNotEmpty) ...[
                       const SizedBox(height: 10),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.network(
-                          imageUrl,
-                          height: 180,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-                            return const SizedBox(
-                              height: 180,
-                              child: Center(child: CircularProgressIndicator()),
-                            );
-                          },
-                          errorBuilder: (context, error, stack) =>
-                              const SizedBox(
-                            height: 60,
-                            child: Center(child: Text("Could not load image")),
+                      GestureDetector(
+                        onTap: () => _showFullScreenIssueImage(context, imageUrl),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.network(
+                            imageUrl,
+                            height: 180,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, progress) {
+                              if (progress == null) return child;
+                              return const SizedBox(
+                                height: 180,
+                                child: Center(child: CircularProgressIndicator()),
+                              );
+                            },
+                            errorBuilder: (context, error, stack) =>
+                                const SizedBox(
+                              height: 60,
+                              child: Center(child: Text("Could not load image")),
+                            ),
                           ),
                         ),
                       ),
