@@ -16,13 +16,13 @@ class _LetterheadPageState extends State<LetterheadPage> {
       TextEditingController(text: "OFFICIAL NOTICE / CERTIFICATE");
   final TextEditingController _contentController = TextEditingController();
 
-  // Address ke liye naya controller add kar diya hai
+  // Added a new controller for the address
   final TextEditingController _addressController =
       TextEditingController(text: "Badliwala, Khushab");
 
-  // Settings > WhatsApp Number se is school ka apna number pehle se bhar
-  // diya jata hai (khud edit bhi kiya ja sakta hai) — agar abhi tak set
-  // nahi kiya to placeholder dikhega.
+  // Pre-filled with this school's own number from Settings > WhatsApp
+  // Number (can also be edited manually) — if not set yet, a
+  // placeholder is shown.
   late final TextEditingController _principalNoController =
       TextEditingController(
           text: currentSchoolContactNumber().isNotEmpty
@@ -35,7 +35,7 @@ class _LetterheadPageState extends State<LetterheadPage> {
     try {
       final pdf = pw.Document();
 
-      // School Logo Load karein (Settings > School Logo se, warna default)
+      // Load the School Logo (from Settings > School Logo, otherwise default)
       pw.MemoryImage? schoolLogo;
       try {
         schoolLogo = pw.MemoryImage(await getSchoolLogoBytes());
@@ -71,7 +71,7 @@ class _LetterheadPageState extends State<LetterheadPage> {
                         pw.SizedBox(height: 2),
                         pw.Text(
                           _addressController
-                              .text, // User ka likha hua address yahan show hoga
+                              .text, // The address the user typed is shown here
                           style: pw.TextStyle(
                             fontSize: 11,
                             color: PdfColors.grey700,
@@ -187,7 +187,7 @@ class _LetterheadPageState extends State<LetterheadPage> {
               ),
             ),
             const SizedBox(height: 15),
-            // Address input field jo user se input legi
+            // Address input field that takes input from the user
             TextField(
               controller: _addressController,
               decoration: const InputDecoration(

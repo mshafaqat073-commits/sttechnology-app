@@ -268,8 +268,7 @@ class _AdmissionPageState extends State<AdmissionPage> {
     // section belongs to.
     if (_selectedClass == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text(
-              "First select a Class, then add its Section.")));
+          content: Text("First select a Class, then add its Section.")));
       return;
     }
     final String className = _selectedClass!;
@@ -332,9 +331,13 @@ class _AdmissionPageState extends State<AdmissionPage> {
     ]);
   }
 
-  Future<void> _generateAdmissionPDF() async {
-      // Current school's logo (from Settings > School Logo, otherwise
-      // default)
+  // Builds the admission slip PDF and returns its bytes. Kept separate
+  // from any display/print/send logic so both the "Print" and "Send"
+  // options (shown after saving the admission) can reuse the exact same
+  // PDF content.
+  Future<Uint8List> _buildAdmissionPdfBytes() async {
+    // Current school's logo (from Settings > School Logo, otherwise
+    // default)
     Uint8List? logoBytes;
     try {
       logoBytes = await getSchoolLogoBytes();
@@ -394,6 +397,8 @@ class _AdmissionPageState extends State<AdmissionPage> {
                             "${_dobController.text} (Age: $_ageDisplay)"),
                         _buildPdfRow("District", _districtController.text),
                         _buildPdfRow("Religion", _religionController.text),
+                        _buildPdfRow("Class", _selectedClass ?? "N/A"),
+                        _buildPdfRow("Section", _selectedSection ?? "N/A"),
                         _buildPdfRow("Gender", _selectedGender ?? "N/A"),
                         _buildPdfRow("Contact no. 1", _contactController.text),
                         _buildPdfRow(
@@ -409,7 +414,6 @@ class _AdmissionPageState extends State<AdmissionPage> {
                   pw.Table(
                       border: pw.TableBorder.all(color: PdfColors.black),
                       children: [
-                        _buildPdfRow("Section", _selectedSection ?? "N/A"),
                         _buildPdfRow("School Name", _preSchoolController.text),
                         _buildPdfRow("Reason of school leaving",
                             _leavingReasonController.text),
@@ -440,93 +444,69 @@ class _AdmissionPageState extends State<AdmissionPage> {
           );
         }));
 
-    final pdfBytes = await pdf.save();
+    return pdf.save();
+  }
 
+  // "Print Admission Form" option — opens the in-app PDF preview screen,
+  // which also gives access to the device's print dialog. This works the
+  // same way on Android/iOS/Desktop and Web, so there's no platform
+  // branching needed here.
+  Future<void> _printAdmissionForm() async {
+    final pdfBytes = await _buildAdmissionPdfBytes();
+    if (!mounted) return;
+    await showPdfPreviewPage(
+      context,
+      title: "Admission Slip Preview",
+      shareFileName: "admission_${_nameController.text}.pdf",
+      build: (PdfPageFormat format) async => pdfBytes,
+    );
+  }
+
+  // "Send Admission Form" option — shares the PDF file directly (e.g. via
+  // WhatsApp/Email) instead of just previewing it.
+  Future<void> _sendAdmissionForm() async {
+    final pdfBytes = await _buildAdmissionPdfBytes();
     if (!mounted) return;
 
     if (kIsWeb) {
-      // Don't use File / path_provider on Web
+      // Don't use File / path_provider on Web — the preview page has its
+      // own share/download option.
       await showPdfPreviewPage(
         context,
         title: "Admission Slip Preview",
         shareFileName: "admission_${_nameController.text}.pdf",
         build: (PdfPageFormat format) async => pdfBytes,
       );
-    } else {
-      // Old File-based method on Android/iOS/Desktop
-      final output = await getTemporaryDirectory();
-      final file = File(
-        "${output.path}/admission_${_nameController.text}.pdf",
+      return;
+    }
+
+    // File-based method on Android/iOS/Desktop
+    final output = await getTemporaryDirectory();
+    final file = File(
+      "${output.path}/admission_${_nameController.text}.pdf",
+    );
+    await file.writeAsBytes(pdfBytes);
+
+    if (!mounted) return;
+    try {
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: "Admission Slip for ${_nameController.text}",
       );
-
-      await file.writeAsBytes(pdfBytes);
-
+    } catch (e) {
+      // On Windows (especially when not packaged as MSIX), share_plus's
+      // native "Share" sheet isn't available and this can fail. In that
+      // case, tell the user where the file was saved so they can attach
+      // it manually via WhatsApp/Email.
       if (mounted) {
-        await _showPdfActionSheet(
-          file,
-          "Admission Slip for ${_nameController.text}",
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Direct Send is not supported on this device. "
+              "File saved at:\n${file.path}"),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 6),
+        ));
       }
     }
-  }
-
-  // Preview and Send options both in one place
-  Future<void> _showPdfActionSheet(File file, String shareText) async {
-    await showModalBottomSheet(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.visibility),
-              title: const Text("Preview"),
-              onTap: () async {
-                Navigator.pop(context);
-                // showPdfPreviewPage opens an in-app preview SCREEN
-                // (the PdfPreview widget) — on Windows/macOS/Linux
-                // Desktop, Printing.layoutPdf() has no preview of its
-                // own (it just opens the raw OS printer dialog), which
-                // is why the preview "didn't show up" there before.
-                // This widget gives a guaranteed, identical preview on
-                // all three platforms.
-                await showPdfPreviewPage(
-                  context,
-                  title: "Admission Slip Preview",
-                  shareFileName: "admission_${_nameController.text}.pdf",
-                  build: (format) async => file.readAsBytes(),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.send),
-              title: const Text("Send"),
-              onTap: () async {
-                Navigator.pop(context);
-                try {
-                  await Share.shareXFiles([XFile(file.path)],
-                      text: shareText);
-                } catch (e) {
-                  // On Windows (especially when not packaged as
-                  // MSIX), share_plus's native "Share" sheet isn't
-                  // available and this can fail. In that case, tell
-                  // the user where the file was saved so they can
-                  // attach it manually via WhatsApp/Email.
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(
-                          "Direct Send is not supported on this device. "
-                          "File saved at:\n${file.path}"),
-                      backgroundColor: Colors.orange,
-                      duration: const Duration(seconds: 6),
-                    ));
-                  }
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Future<void> _sendWhatsAppMessage(String phone, String name,
@@ -544,6 +524,103 @@ class _AdmissionPageState extends State<AdmissionPage> {
         Uri.parse("https://wa.me/$cleanPhone?text=$message");
     if (await canLaunchUrl(whatsappUrl)) {
       await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  // Shown right after the admission is saved. Asks the user what they
+  // want to do next — send the WhatsApp welcome message, Send the
+  // admission form, Print it, or Set Fee. Whichever action is chosen,
+  // once that action finishes, the same options are shown again — so the
+  // user keeps coming back to this same screen until they explicitly
+  // choose "Done". Nothing here happens automatically; every action is
+  // only done when the user picks it.
+  Future<void> _showPostAdmissionActions(
+    String docId,
+    String studentName, {
+    required String phone,
+    required String parentLoginId,
+    required String parentPin,
+  }) async {
+    if (!mounted) return;
+
+    final action = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Admission Saved"),
+        content: Text(
+            "What would you like to do next for $studentName's admission form?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'whatsapp'),
+            child: const Text("Send WhatsApp Message"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'send'),
+            child: const Text("Send Admission Form"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'print'),
+            child: const Text("Print Admission Form"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'fee'),
+            child: const Text("Set Fee"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'done'),
+            child: const Text("Done"),
+          ),
+        ],
+      ),
+    );
+
+    switch (action) {
+      case 'whatsapp':
+        await _sendWhatsAppMessage(
+          phone,
+          studentName,
+          parentLoginId: parentLoginId,
+          parentPin: parentPin,
+        );
+        await _showPostAdmissionActions(docId, studentName,
+            phone: phone,
+            parentLoginId: parentLoginId,
+            parentPin: parentPin);
+        break;
+      case 'send':
+        await _sendAdmissionForm();
+        await _showPostAdmissionActions(docId, studentName,
+            phone: phone,
+            parentLoginId: parentLoginId,
+            parentPin: parentPin);
+        break;
+      case 'print':
+        await _printAdmissionForm();
+        await _showPostAdmissionActions(docId, studentName,
+            phone: phone,
+            parentLoginId: parentLoginId,
+            parentPin: parentPin);
+        break;
+      case 'fee':
+        if (!mounted) return;
+        // Pushed (not replaced) so that returning from Set Fee brings the
+        // user back here, to the same options.
+        await Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) =>
+                    SetFeePage(docId: docId, studentName: studentName)));
+        await _showPostAdmissionActions(docId, studentName,
+            phone: phone,
+            parentLoginId: parentLoginId,
+            parentPin: parentPin);
+        break;
+      case 'done':
+      default:
+        // Leave the admission form now that the user is finished with it.
+        if (mounted) Navigator.pop(context);
+        break;
     }
   }
 
@@ -780,24 +857,22 @@ class _AdmissionPageState extends State<AdmissionPage> {
           {'lastFormNo': FieldValue.increment(1)}, SetOptions(merge: true));
 
       if (mounted) {
-        await _sendWhatsAppMessage(
-          _contactController.text,
-          _nameController.text,
-          parentLoginId: parentCreds['id'],
-          parentPin: parentCreds['pin'],
-        );
-        await _generateAdmissionPDF();
         await _showParentCredentialsDialog(
           _nameController.text.trim(),
           parentCreds['id']!,
           parentCreds['pin']!,
         );
         if (!mounted) return;
-        Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-                builder: (context) => SetFeePage(
-                    docId: docRef.id, studentName: _nameController.text)));
+        // Ask the user what to do next — WhatsApp message / Send / Print /
+        // Set Fee — and keep bringing them back to this same choice after
+        // each action, instead of sending/doing anything automatically.
+        await _showPostAdmissionActions(
+          docRef.id,
+          _nameController.text.trim(),
+          phone: _contactController.text,
+          parentLoginId: parentCreds['id']!,
+          parentPin: parentCreds['pin']!,
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -982,7 +1057,7 @@ class _AdmissionPageState extends State<AdmissionPage> {
                         decoration: const InputDecoration(
                             labelText: "Reason of School Leaving")),
                     const SizedBox(height: 20),
-                    // Submit Button Loading ke sath
+                    // Submit Button with Loading
                     ElevatedButton(
                       onPressed: _isSaving ? null : _addStudent,
                       child: _isSaving
@@ -1002,7 +1077,8 @@ class _AdmissionPageState extends State<AdmissionPage> {
                           : const Text("SUBMIT ADMISSION"),
                     ),
                     const SizedBox(
-                        height: 24), // So it doesn't hide behind the gesture nav bar
+                        height:
+                            24), // So it doesn't hide behind the gesture nav bar
                   ],
                 ), // <--- Column band
               ), // <--- SingleChildScrollView band

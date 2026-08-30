@@ -10,12 +10,11 @@ import 'school_context.dart';
 import 'school_branding.dart';
 import 'pdf_preview_helper.dart';
 
-/// Parent ke liye read-only fee payment history — sirf usi bache ki
-/// jitni bhi payments 'fee_history' collection mein save hain
-/// (jo admin ki PayFeePage se _submitFee() ke waqt banti hain), date ke
-/// sath latest-first order mein. Koi delete/edit option nahi — sirf
-/// dekhne aur PDF receipt nikalne ke liye (history_page.dart admin
-/// side ki tarah hi).
+/// Read-only fee payment history for the parent — just that child's
+/// payments saved in the 'fee_history' collection (created when admin's
+/// PayFeePage calls _submitFee()), in latest-first date order. No
+/// delete/edit option — only for viewing and getting a PDF receipt
+/// (same as history_page.dart's admin side).
 class ParentFeeHistoryPage extends StatelessWidget {
   final String studentId;
   final String studentName;
@@ -26,8 +25,8 @@ class ParentFeeHistoryPage extends StatelessWidget {
     required this.studentName,
   });
 
-  // Ye default fields hain — inhi ki tarteeb pehle dikhai jayegi.
-  // Koi bhi naya custom field automatically inke baad list ho jayega.
+  // These are the default fields — they are shown in this order first.
+  // Any new custom field is automatically listed after these.
   static const List<String> _defaultFieldOrder = [
     'monthlyFee',
     'admissionFee',
@@ -51,7 +50,7 @@ class ParentFeeHistoryPage extends StatelessWidget {
     return [...known, ...extra];
   }
 
-  // camelCase field name ko readable label me convert karta hai
+  // Converts a camelCase field name into a readable label
   String _formatFieldLabel(String key) {
     if (key.isEmpty) return key;
     String spaced =
@@ -59,11 +58,11 @@ class ParentFeeHistoryPage extends StatelessWidget {
     return spaced[0].toUpperCase() + spaced.substring(1);
   }
 
-  // Detail dialog ke andar "Fee Breakdown" section banata hai. Naye
-  // records mein har field ka Paid + Remaining dono dikhata hai (jaise
-  // jaise partial payment hui waise hi). Purane records (jinke paas sirf
-  // 'restoredFees' hai) ke liye sirf "Paid" dikhaya jata hai kyunke us
-  // waqt fields hamesha poori pay hoti thin.
+  // Builds the "Fee Breakdown" section inside the detail dialog. For
+  // new records, shows both Paid + Remaining for each field (matching
+  // however the partial payment went). For old records (which only
+  // have 'restoredFees'), only "Paid" is shown, since at that time
+  // fields were always paid in full.
   List<Widget> _buildFeeBreakdownSection(Map<String, dynamic> data) {
     bool isNewSchema = data.containsKey('paidBreakdown');
 
@@ -138,8 +137,8 @@ class ParentFeeHistoryPage extends StatelessWidget {
       ));
     }
 
-    // Previous dues ki row bhi breakdown mein dikhayein (agar us waqt
-    // kuch pay kiya gaya tha)
+    // Also show the Previous Dues row in the breakdown (if something
+    // was paid toward it at that time)
     double duesPaid = (data['duesPaid'] ?? 0).toDouble();
     if (isNewSchema && duesPaid > 0) {
       double duesRemaining = (remainingMap['dues'] is num)
@@ -192,8 +191,8 @@ class ParentFeeHistoryPage extends StatelessWidget {
     );
   }
 
-  // Record ki receipt PDF banata hai aur share/print karne ke liye khol
-  // deta hai — bilkul history_page.dart (admin) ki tarah.
+  // Generates a record's receipt PDF and opens it for sharing/printing
+  // — exactly like history_page.dart's (admin) version.
   Future<void> _generateReceiptPdf(
     BuildContext context, {
     required Map<String, dynamic> data,
@@ -437,8 +436,8 @@ class ParentFeeHistoryPage extends StatelessWidget {
           }
 
           var docs = snapshot.data!.docs;
-          // Latest payment sabse upar (client-side sort, taake
-          // composite Firestore index ki zaroorat na pade).
+          // Latest payment at the top (client-side sort, so a
+          // composite Firestore index isn't needed).
           docs.sort((a, b) {
             var dataA = a.data() as Map<String, dynamic>;
             var dataB = b.data() as Map<String, dynamic>;

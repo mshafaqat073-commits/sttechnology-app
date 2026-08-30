@@ -214,7 +214,7 @@ class _AddIncomeOrFeePageState extends State<AddIncomeOrFeePage> {
             key == 'class' ||
             key == 'section' ||
             key == 'updatedAt') {
-          return; // meta fields, fee field nahi
+          return; // meta fields, not fee fields
         }
         if (!_controllers.containsKey(key)) {
           _controllers[key] = TextEditingController(text: '0');
@@ -430,7 +430,7 @@ class _AddIncomeOrFeePageState extends State<AddIncomeOrFeePage> {
                 const SizedBox(height: 12),
               ],
 
-              // Fee Structure Input Fields — ab dynamic list se, "amount to add"
+              // Fee Structure Input Fields — now from a dynamic list, "amount to add"
               ResponsiveGrid(
                 padding: EdgeInsets.zero,
                 shrinkWrap: true,

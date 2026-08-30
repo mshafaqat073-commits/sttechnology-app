@@ -62,6 +62,20 @@ class _SLCGeneratorState extends State<SLCGenerator> {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     String newGrNumber = await _getNextGrNumber();
 
+    // The address shown on the SLC comes from whatever is set in Settings
+    // — read from 'settings/global', same as WhatsApp Number, so that
+    // changing the address in Settings also updates the SLC.
+    String schoolAddress = '';
+    try {
+      var settingsDoc = await schoolCollection('settings').doc('global').get();
+      if (settingsDoc.exists && settingsDoc.data() != null) {
+        schoolAddress =
+            (settingsDoc.data() as Map<String, dynamic>)['address'] ?? '';
+      }
+    } catch (e) {
+      debugPrint("Error loading school address: $e");
+    }
+
     // Database saving logic (ensuring correct grNumber)
     await schoolCollection('SLC').doc(doc.id).set({
       ...data,
@@ -143,7 +157,9 @@ class _SLCGeneratorState extends State<SLCGenerator> {
                       pw.Container(
                           padding: const pw.EdgeInsets.all(8),
                           decoration: pw.BoxDecoration(border: pw.Border.all()),
-                          child: pw.Text("REGISTRATION NO: 3537/G-I")),
+                          // Left blank — each school fills in its own
+                          // registration number.
+                          child: pw.Text("REGISTRATION NO: ____________")),
                     ]),
                 pw.SizedBox(height: 30),
 
@@ -210,10 +226,17 @@ class _SLCGeneratorState extends State<SLCGenerator> {
                           "Date: ${DateFormat('dd-MM-yyyy').format(DateTime.now())}\n____________"),
                     ]),
                 pw.SizedBox(height: 20),
-                if (currentSchoolContactNumber().isNotEmpty)
+                // Both the Address and WhatsApp Number from Settings appear
+                // here dynamically — no hardcoded address.
+                if (schoolAddress.isNotEmpty ||
+                    currentSchoolContactNumber().isNotEmpty)
                   pw.Center(
                       child: pw.Text(
-                          "Near qazi shop badliwala KHB (${currentSchoolContactNumber()})",
+                          [
+                            if (schoolAddress.isNotEmpty) schoolAddress,
+                            if (currentSchoolContactNumber().isNotEmpty)
+                              currentSchoolContactNumber(),
+                          ].join('   |   '),
                           style: const pw.TextStyle(fontSize: 10))),
               ]),
             ),

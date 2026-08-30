@@ -129,7 +129,7 @@ class _StudentAttendanceReportPageState
     return trimmed[0].toUpperCase() + trimmed.substring(1).toLowerCase();
   }
 
-  // Ek class ke students ko unke Section ke hisaab se group karna
+  // Group a class's students by their Section
   Map<String, List<Map<String, dynamic>>> _groupBySection(
       List<Map<String, dynamic>> students) {
     Map<String, List<Map<String, dynamic>>> grouped = {};

@@ -3,13 +3,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'school_context.dart';
 import 'notifications_page.dart';
 
-/// Bell icon jo dashboard ki AppBar mein lagta he — [uids] (student ke liye
-/// [studentId], ya parent ke liye sab siblings ke ids, ya teacher ke liye
-/// [staffDocId]) ke un notifications ko count karta he jo abhi tak 'read'
-/// nahi huye, aur unka number ek chhote LAAL badge mein upar-right corner
-/// pe dikhata he (WhatsApp/Gmail jese apps ki tarah). Badge par tap karne
-/// se seedha NotificationsPage khulta he, jahan tap karte hi wo notification
-/// 'read' ho jati he aur count khud-b-khud kam ho jata he.
+/// The bell icon shown in the dashboard's AppBar — counts [uids]'s
+/// (student's [studentId], or all siblings' ids for a parent, or the
+/// [staffDocId] for a teacher) notifications that aren't 'read' yet,
+/// and shows that number in a small RED badge in the top-right corner
+/// (like WhatsApp/Gmail-style apps). Tapping the badge opens
+/// NotificationsPage directly, where tapping a notification marks it
+/// 'read' and the count automatically decreases.
 class NotificationBellIcon extends StatelessWidget {
   final List<String> uids;
   final Color iconColor;
@@ -36,10 +36,10 @@ class NotificationBellIcon extends StatelessWidget {
     }
 
     return StreamBuilder<QuerySnapshot>(
-      // Composite index se bachne ke liye sirf 'toId whereIn' query karte
-      // hain aur 'read' ka hisaab neeche Dart mein lagate hain (isi tarah
-      // NotificationsPage bhi 'orderBy' Firestore ki jagah Dart mein karta
-      // he — dekhein us file ka comment).
+      // To avoid needing a composite index, only a 'toId whereIn' query
+      // is done, and 'read' is counted below in Dart (NotificationsPage
+      // does the same thing with 'orderBy' in Dart instead of Firestore
+      // — see that file's comment).
       stream: schoolCollection('push_notifications')
           .where('toId', whereIn: queryIds)
           .snapshots(),

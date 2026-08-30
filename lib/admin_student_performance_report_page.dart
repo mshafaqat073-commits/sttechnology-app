@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'school_context.dart';
 import 'performance_bar_chart.dart';
 import 'parent_performance_page.dart';
 
-/// Admin > Reports > "Students Performance" — har active student ki
-/// attendance % + result avg % + ek remark ek hi list mein. Tap karne par
-/// wahi detail page khulta hai jo Parent Dashboard se bhi khulta hai
-/// (attendance/result/fee history + graph) — koi duplicate detail page
-/// nahi banaya.
+/// Admin > Reports > "Students Performance" — every active student's
+/// attendance % + result avg % + a remark, all in one list. Tapping opens
+/// the same detail page that also opens from the Parent Dashboard
+/// (attendance/result/fee history + graph) — no duplicate detail page
+/// was created.
 ///
-/// Data teeno collections se already-existing fields ke sath aata hai:
+/// Data comes from all three collections' already-existing fields:
 ///   students   (name, class, section, imageUrl, dues, status)
 ///   attendance (studentId, status)
 ///   results    (studentId, percentage)
@@ -46,6 +49,98 @@ class _AdminStudentPerformanceReportPageState
     await _future;
   }
 
+  List<_StudentPerformanceRow> _filterRows(_StudentReportBundle bundle) {
+    return bundle.rows.where((r) {
+      final matchesSearch =
+          _searchQuery.isEmpty || r.name.toLowerCase().contains(_searchQuery);
+      final matchesClass =
+          _selectedClass == 'All' || r.className == _selectedClass;
+      return matchesSearch && matchesClass;
+    }).toList();
+  }
+
+  /// Builds the PDF document for the currently filtered list of students
+  /// and opens the native preview/print sheet (Printing.layoutPdf handles
+  /// both "Preview" and "Print" — the user picks Save/Print/Share from
+  /// there, so no separate download button is needed).
+  Future<void> _exportPdf(List<_StudentPerformanceRow> rows) async {
+    final doc = pw.Document();
+
+    final headers = [
+      'Name',
+      'Class',
+      'Attendance %',
+      'Result %',
+      'Remark',
+    ];
+
+    final data = rows.map((r) {
+      final classLabel =
+          r.section.isNotEmpty ? '${r.className} - ${r.section}' : r.className;
+      return [
+        r.name,
+        classLabel,
+        r.attendancePercent != null
+            ? '${r.attendancePercent!.toStringAsFixed(0)}%'
+            : 'N/A',
+        r.avgResultPercent != null
+            ? '${r.avgResultPercent!.toStringAsFixed(0)}%'
+            : 'N/A',
+        _remarkText(r.attendancePercent, r.avgResultPercent),
+      ];
+    }).toList();
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        header: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'Students Performance Report',
+              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+            ),
+            if (_selectedClass != 'All')
+              pw.Text('Class: $_selectedClass',
+                  style: const pw.TextStyle(fontSize: 11)),
+            pw.SizedBox(height: 8),
+          ],
+        ),
+        build: (context) => [
+          pw.TableHelper.fromTextArray(
+            headers: headers,
+            data: data,
+            headerStyle: pw.TextStyle(
+              fontWeight: pw.FontWeight.bold,
+              fontSize: 10,
+              color: PdfColors.white,
+            ),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.teal800),
+            cellStyle: const pw.TextStyle(fontSize: 9),
+            cellAlignment: pw.Alignment.centerLeft,
+            cellAlignments: {
+              2: pw.Alignment.center,
+              3: pw.Alignment.center,
+            },
+            border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+          ),
+        ],
+        footer: (context) => pw.Align(
+          alignment: pw.Alignment.centerRight,
+          child: pw.Text(
+            'Page ${context.pageNumber} of ${context.pagesCount}',
+            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+          ),
+        ),
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => doc.save(),
+      name: 'Students_Performance_Report.pdf',
+    );
+  }
+
   Future<_StudentReportBundle> _load() async {
     final studentsSnap = await schoolCollection('students')
         .where('status', isEqualTo: 'active')
@@ -79,14 +174,16 @@ class _AdminStudentPerformanceReportPageState
       for (var a in attendanceDocs) {
         if ((a.data())['status']?.toString() == 'Present') present++;
       }
-      final attendancePercent =
-          attendanceDocs.isNotEmpty ? (present / attendanceDocs.length) * 100 : null;
+      final attendancePercent = attendanceDocs.isNotEmpty
+          ? (present / attendanceDocs.length) * 100
+          : null;
 
       double? avgResultPercent;
       if (resultDocs.isNotEmpty) {
         double sum = 0;
         for (var r in resultDocs) {
-          sum += double.tryParse((r.data())['percentage']?.toString() ?? '0') ?? 0;
+          sum +=
+              double.tryParse((r.data())['percentage']?.toString() ?? '0') ?? 0;
         }
         avgResultPercent = sum / resultDocs.length;
       }
@@ -115,6 +212,23 @@ class _AdminStudentPerformanceReportPageState
       appBar: AppBar(
         title: const Text("Students Performance"),
         backgroundColor: Colors.teal[800],
+        actions: [
+          FutureBuilder<_StudentReportBundle>(
+            future: _future,
+            builder: (context, snapshot) {
+              final bundle = snapshot.data;
+              final canExport =
+                  snapshot.connectionState == ConnectionState.done &&
+                      bundle != null;
+              return IconButton(
+                icon: const Icon(Icons.picture_as_pdf),
+                tooltip: "Preview / Print PDF",
+                onPressed:
+                    canExport ? () => _exportPdf(_filterRows(bundle)) : null,
+              );
+            },
+          ),
+        ],
       ),
       body: FutureBuilder<_StudentReportBundle>(
         future: _future,
@@ -127,13 +241,7 @@ class _AdminStudentPerformanceReportPageState
           }
           final bundle = snapshot.data!;
 
-          var filtered = bundle.rows.where((r) {
-            final matchesSearch = _searchQuery.isEmpty ||
-                r.name.toLowerCase().contains(_searchQuery);
-            final matchesClass =
-                _selectedClass == 'All' || r.className == _selectedClass;
-            return matchesSearch && matchesClass;
-          }).toList();
+          var filtered = _filterRows(bundle);
 
           return Column(
             children: [
@@ -211,6 +319,88 @@ class _AdminStudentPerformanceReportPageState
     );
   }
 
+  /// Simple text-only remark for the PDF table (kept independent of
+  /// PerformanceRemark's icon/color widget fields, which don't translate
+  /// to a printed table).
+  String _remarkText(double? attendance, double? result) {
+    if (attendance == null && result == null) return 'No Data';
+    final scores = <double>[
+      if (attendance != null) attendance,
+      if (result != null) result,
+    ];
+    final avg = scores.reduce((a, b) => a + b) / scores.length;
+    if (avg >= 85) return 'Excellent';
+    if (avg >= 70) return 'Good';
+    if (avg >= 50) return 'Average';
+    return 'Needs Attention';
+  }
+
+  /// Builds a single-page detail PDF for one student and opens the native
+  /// preview/print sheet.
+  Future<void> _exportSinglePdf(_StudentPerformanceRow r) async {
+    final doc = pw.Document();
+    final classLabel =
+        r.section.isNotEmpty ? '${r.className} - ${r.section}' : r.className;
+
+    doc.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'Student Performance Report',
+              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 16),
+            pw.Text(r.name,
+                style:
+                    pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 4),
+            pw.Text('Class: $classLabel',
+                style: const pw.TextStyle(fontSize: 12)),
+            pw.SizedBox(height: 20),
+            pw.TableHelper.fromTextArray(
+              headers: const ['Metric', 'Value'],
+              data: [
+                [
+                  'Attendance %',
+                  r.attendancePercent != null
+                      ? '${r.attendancePercent!.toStringAsFixed(0)}%'
+                      : 'N/A',
+                ],
+                [
+                  'Result Avg %',
+                  r.avgResultPercent != null
+                      ? '${r.avgResultPercent!.toStringAsFixed(0)}%'
+                      : 'N/A',
+                ],
+                [
+                  'Remark',
+                  _remarkText(r.attendancePercent, r.avgResultPercent)
+                ],
+              ],
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 11,
+                color: PdfColors.white,
+              ),
+              headerDecoration:
+                  const pw.BoxDecoration(color: PdfColors.teal800),
+              cellStyle: const pw.TextStyle(fontSize: 11),
+              border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => doc.save(),
+      name: 'Student_Performance_${r.name.replaceAll(' ', '_')}.pdf',
+    );
+  }
+
   Widget _studentTile(BuildContext context, _StudentPerformanceRow r) {
     final remark = PerformanceRemark.overall(
       r.attendancePercent ?? 0,
@@ -232,36 +422,50 @@ class _AdminStudentPerformanceReportPageState
               ? const Icon(Icons.person, color: Colors.indigo)
               : null,
         ),
-        title: Text(r.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+        title:
+            Text(r.name, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text(
           r.section.isNotEmpty
               ? "Class: ${r.className} - ${r.section}"
               : "Class: ${r.className}",
         ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Icon(remark.icon, size: 14, color: remark.color),
-                const SizedBox(width: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(remark.icon, size: 14, color: remark.color),
+                    const SizedBox(width: 4),
+                    Text(
+                      r.attendancePercent != null
+                          ? "${r.attendancePercent!.toStringAsFixed(0)}% att"
+                          : "No att.",
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: remark.color),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
                 Text(
-                  r.attendancePercent != null
-                      ? "${r.attendancePercent!.toStringAsFixed(0)}% att"
-                      : "No att.",
-                  style: TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.bold, color: remark.color),
+                  r.avgResultPercent != null
+                      ? "${r.avgResultPercent!.toStringAsFixed(0)}% avg result"
+                      : "No result",
+                  style: const TextStyle(fontSize: 11, color: Colors.black54),
                 ),
               ],
             ),
-            const SizedBox(height: 2),
-            Text(
-              r.avgResultPercent != null
-                  ? "${r.avgResultPercent!.toStringAsFixed(0)}% avg result"
-                  : "No result",
-              style: const TextStyle(fontSize: 11, color: Colors.black54),
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf, size: 20),
+              color: Colors.teal.shade800,
+              tooltip: "Export PDF for ${r.name}",
+              onPressed: () => _exportSinglePdf(r),
             ),
           ],
         ),

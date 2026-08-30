@@ -46,22 +46,19 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(
-              height: 32,
-              width: 32,
-              child: SchoolLogo(fit: BoxFit.contain),
-            ),
-            const SizedBox(width: 10),
-            Flexible(
-              child: SchoolNameText(
-                suffix: " Dashboard",
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
+        centerTitle: true,
+        leadingWidth: 56,
+        leading: const Padding(
+          padding: EdgeInsets.only(left: 12),
+          child: SizedBox(
+            height: 32,
+            width: 32,
+            child: SchoolLogo(fit: BoxFit.contain),
+          ),
+        ),
+        title: const Text(
+          "Dashboard",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.teal[800],
         actions: [
@@ -240,11 +237,24 @@ class _DashboardPageState extends State<DashboardPage> {
                             schoolName = name.trim();
                           }
                         }
-                        return Text("Welcome, Admin $schoolName",
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold));
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 700),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                "Welcome, Admin $schoolName",
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        );
                       },
                     ),
                     const SizedBox(height: 15),

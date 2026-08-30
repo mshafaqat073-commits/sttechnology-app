@@ -14,7 +14,7 @@ class _OtherCollectionPageState extends State<OtherCollectionPage> {
   final TextEditingController _sourceController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _descriptionController =
-      TextEditingController(); // Extra details ke liye (optional)
+      TextEditingController(); // For extra details (optional)
 
   bool _isSaving = false;
 
@@ -44,7 +44,7 @@ class _OtherCollectionPageState extends State<OtherCollectionPage> {
     setState(() => _isSaving = true);
 
     try {
-      // 'other_incomes' collection mein record save karna
+      // Save the record into the 'other_incomes' collection
       await schoolCollection('other_incomes').add({
         'incomeSource': source,
         'description': _descriptionController.text.trim(),

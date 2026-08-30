@@ -31,7 +31,7 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
     super.dispose();
   }
 
-  // Fixed academic order (Playgroup se Ten tak)[cite: 1]
+  // Fixed academic order (Playgroup through Ten)[cite: 1]
   static const List<String> _baseClassesOrder = [
     'Playgroup',
     'Nursery',
@@ -48,7 +48,7 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
     'Ten'
   ];
 
-  // Class sorting function: Nayi/Custom class ko sabse upar (-1) rakhega, baaki ko fixed order mein[cite: 1]
+  // Class sorting function: keeps New/Custom classes at the top (-1), rest in fixed order[cite: 1]
   int _compareClasses(String? classA, String? classB) {
     String a = classA ?? '';
     String b = classB ?? '';
@@ -227,7 +227,7 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
       ),
     );
 
-    // PDF ko memory mein save karein
+    // Save the PDF in memory
     final pdfBytes = await pdf.save();
 
     if (!context.mounted) return;
@@ -371,9 +371,9 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
     );
   }
 
-  // Search bar — sirf "All Students" page ke upar dikhaya jata hai,
-  // taake kisi bhi student ko name, father name, class, section,
-  // contact number ya family ID se search kiya ja sake.
+  // Search bar — only shown at the top of the "All Students" page,
+  // so any student can be searched by name, father name, class,
+  // section, contact number, or family ID.
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
@@ -431,9 +431,9 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
             return const Center(child: Text("No active students found."));
           }
 
-          // Search bar se filter (name, father name, class, section,
-          // contact number ya family ID mein se kisi bhi field mein
-          // match hone par student dikhayein).
+          // Filter using the search bar (matches if the query is found
+          // in any of: name, father name, class, section, contact number,
+          // or family ID — show the student if it matches).
           if (_searchQuery.trim().isNotEmpty) {
             final searchTerm = _searchQuery.trim().toLowerCase();
             docs = docs.where((doc) {
@@ -453,7 +453,7 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
             }).toList();
           }
 
-          // Class-wise aur name ke mutabiq sorting
+          // Sorting by class and then by name
           docs.sort((a, b) {
             var dataA = a.data() as Map<String, dynamic>;
             var dataB = b.data() as Map<String, dynamic>;

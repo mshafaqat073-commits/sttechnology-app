@@ -52,6 +52,16 @@ class _AIChatPageState extends State<AIChatPage> {
     });
   }
 
+  // The principal's name now comes from each school's own Settings
+  // (currentSchoolPrincipalName(), which reads from the SchoolContext
+  // cache). If a school hasn't set a principal name yet, this line is
+  // simply hidden instead of the AI stating a wrong/another school's name.
+  String _principalLine() {
+    final principal = currentSchoolPrincipalName();
+    if (principal.isEmpty) return '';
+    return 'The principal of the school is $principal${currentSchoolContactNumber().isNotEmpty ? ' (Contact: ${currentSchoolContactNumber()})' : ''}.\n';
+  }
+
   // Role ke hisaab se AI ko batata he ke ye kis se baat kar raha he aur
   // kya cheezen us role ko NAHI batani — taake fee/financial aur doosre
   // logon ki personal info sirf Admin tak mehdood rahe.
@@ -141,24 +151,20 @@ section of the app.
           "messages": [
             {
               "role": "system",
-              // ⚠️ NOTE: School ka NAAM aur contact NUMBER ab dynamic hain
-              // (Settings > WhatsApp Number se), lekin neeche kuch aur
-              // baatein (principal ka naam, establish hone ka saal,
-              // YouTube/Facebook links) is WAQT bhi sirf "AEP School
-              // System" ke hi hain — agar ye app kisi doosri school ko
-              // den to ye tafseelat manually yahan badalni hongi (ya
-              // inhein bhi Settings ka hissa bana kar dynamic banayein).
+              // The school name, principal name, and contact number are all
+              // now dynamic (from Settings, i.e. the per-school Firestore
+              // doc) — any school can set Settings > School Name / Principal
+              // Name / WhatsApp Number in its own app instance and AI Chat
+              // will automatically give that school's correct information.
+              // The old hardcoded "AEP School System"-specific details
+              // (year established, the "only institute in Khushab" claim,
+              // and YouTube/Facebook links) have been removed here since
+              // they were only correct for one specific school — if needed,
+              // these can also be turned into new Settings fields and made
+              // dynamic later.
               "content": """
 You are the official AI Assistant of ${currentSchoolDisplayName()}.
-The school was established in 2017.
-The principal of the school is Muhammad Shafaqat Ali Zafar${currentSchoolContactNumber().isNotEmpty ? ' (Contact: ${currentSchoolContactNumber()})' : ''}.
-Key Highlight: ${currentSchoolDisplayName()} is the only institute in Khushab that organizes grand annual functions.
-
-Social Media & Online Presence:
-Users can search for "${currentSchoolDisplayName()}" on YouTube, Facebook, and TikTok.
-youtube link: https://youtube.com/@aepschoolsystem073?si=lv4aDnPGbZ_oikGt
-facebook pagelink: https://www.facebook.com/share/14mNUMx1rD3/
-
+${_principalLine()}
 ${currentSchoolDisplayName()} is built with Flutter and Firebase.
 
 Your users are:

@@ -81,19 +81,19 @@ class _ProfitLossReportPageState extends State<ProfitLossReportPage> {
     if (year != null) setState(() => _selectedYear = year);
   }
 
-  // Income aur Expense ka data fetch karna ('fee_history', 'other_incomes'
-  // aur 'expenses' collections se), filtered by the currently selected
-  // period (All Time / Monthly / Yearly). history_page.dart mein income do
-  // collections se aata he — fee_history (student fee payments) aur
-  // other_incomes (misc income jaise rent, donations, waghera) — is liye
-  // yahan bhi dono ko shamil karna zaroori he, warna Other Income
-  // completely miss ho jati he.
+  // Fetches Income and Expense data (from the 'fee_history',
+  // 'other_incomes' and 'expenses' collections), filtered by the
+  // currently selected period (All Time / Monthly / Yearly). In
+  // history_page.dart, income comes from two collections — fee_history
+  // (student fee payments) and other_incomes (misc income like rent,
+  // donations, etc.) — so both must be included here too, otherwise
+  // Other Income is completely missed.
   Future<Map<String, double>> _getFinancialData() async {
     double feeIncome = 0.0;
     double otherIncome = 0.0;
     double totalExpense = 0.0;
 
-    // Fee History collection se income calculate karna ('amountPaid' field)
+    // Calculate income from the Fee History collection ('amountPaid' field)
     try {
       var feeSnapshot = await schoolCollection('fee_history').get();
       for (var doc in feeSnapshot.docs) {
@@ -113,7 +113,7 @@ class _ProfitLossReportPageState extends State<ProfitLossReportPage> {
       debugPrint("Fee History Error: $e");
     }
 
-    // Other Incomes collection se income calculate karna ('amountPaid' field)
+    // Calculate income from the Other Incomes collection ('amountPaid' field)
     try {
       var otherSnapshot = await schoolCollection('other_incomes').get();
       for (var doc in otherSnapshot.docs) {
@@ -135,7 +135,7 @@ class _ProfitLossReportPageState extends State<ProfitLossReportPage> {
 
     double totalIncome = feeIncome + otherIncome;
 
-    // Expenses collection se expenses calculate karna ('paid' field)
+    // Calculate expenses from the Expenses collection ('paid' field)
     try {
       var expenseSnapshot = await schoolCollection('expenses').get();
       for (var doc in expenseSnapshot.docs) {

@@ -1,22 +1,21 @@
-/// Admin login ab (username/password ke pichay) Firebase Auth use karta hai,
-/// lekin Admin ke paas asal mein koi email nahi hoti — sirf username hota
-/// hai. Is liye har admin ke liye ek "internal" email khud bana lete hain,
-/// jo sirf Firebase Auth ke andar identifier ke tor par use hoti hai, kabhi
-/// user ko dikhai nahi jaati aur kabhi real email ki tarah verify/use nahi
-/// hoti.
+/// Admin login now uses Firebase Auth (behind the username/password),
+/// but an Admin doesn't actually have an email — only a username. So an
+/// "internal" email is generated for each admin, which is only used as
+/// an identifier inside Firebase Auth — it's never shown to the user and
+/// is never verified/used like a real email.
 ///
 /// !! IMPORTANT !!
-/// Ye email sirf ACCOUNT BANATE waqt (migration script / naya admin add
-/// karte waqt) us waqt ke username se banti hai aur phir hamesha ke liye
-/// FIXED rehti hai — chahe baad mein admin apna "username" (Firestore
-/// wala display/login field) badal le. Login hamesha pehle Firestore mein
-/// username se dhoond kar us doc ki `authEmail` field nikalta hai, phir
-/// wahi email Firebase Auth ko deta hai — is liye username badalne se
-/// koi masla nahi hota.
+/// This email is generated only at ACCOUNT CREATION time (migration
+/// script / when adding a new admin), from the username at that time,
+/// and then stays FIXED forever — even if the admin later changes their
+/// "username" (the display/login field in Firestore). Login always first
+/// looks up the username in Firestore, reads that doc's `authEmail`
+/// field, and then passes that same email to Firebase Auth — so changing
+/// the username never causes any issue.
 ///
-/// Node.js migration script (migrate_admin_to_auth.js, project root) mein bhi
-/// bilkul yehi logic honi chahiye, warna dono taraf ki email match nahi
-/// karegi.
+/// The Node.js migration script (migrate_admin_to_auth.js, project root)
+/// must have exactly this same logic, otherwise the emails on both sides
+/// won't match.
 const String kAdminAuthEmailDomain = 'admin.aepschoolsystem.local';
 
 String adminEmailForUsername(String username) {

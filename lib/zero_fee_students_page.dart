@@ -32,12 +32,12 @@ class _ZeroFeeStudentsPageState extends State<ZeroFeeStudentsPage> {
     final studentsSnap = await schoolCollection('students')
         .where('status', isEqualTo: 'active')
         .get();
-    // Monthly fee ka asal rate sirf students collection se lena hai —
-    // fee_structures.monthlyFee ek "remaining balance" hai jo is mahine
-    // ki payment hote hi 0 ho jata hai, is liye usay yahan (ya kisi bhi
-    // "kitna fee assign hai" wale check mein) source ke tor par nahi
-    // lena chahiye, warna har fully-paid student ghalati se "0 fee"
-    // dikhne lag jata hai.
+    // The actual monthly fee rate should be taken only from the students
+    // collection — fee_structures.monthlyFee is a "remaining balance"
+    // that becomes 0 as soon as this month's payment is made, so it
+    // shouldn't be used as the source here (or in any "how much fee is
+    // assigned" check), otherwise every fully-paid student would
+    // mistakenly show up as "0 fee".
 
     final List<Map<String, dynamic>> results = [];
     for (var doc in studentsSnap.docs) {

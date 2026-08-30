@@ -25,7 +25,7 @@ class StaffDirectoryReportPage extends StatelessWidget {
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        // Staff ya teachers collection ko fetch karna
+        // Fetch the staff or teachers collection
         stream: schoolCollection('staff').snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -86,7 +86,7 @@ class StaffDirectoryReportPage extends StatelessWidget {
                     var data = docs[index].data() as Map<String, dynamic>;
                     String name = data['name'] ?? 'N/A';
                     String role = data['role'] ?? 'Teacher';
-                    // Database field 'contact' check karein (fallback ke liye phone/contactNo bhi rakh diya hai)
+                    // Check the database field 'contact' (phone/contactNo also kept as a fallback)
                     String phone = data['contact'] ??
                         data['contactNo'] ??
                         data['phone'] ??

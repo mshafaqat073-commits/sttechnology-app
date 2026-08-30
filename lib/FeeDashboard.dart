@@ -33,8 +33,8 @@ class _FeeDashboardState extends State<FeeDashboard> {
     double duesTotal = 0;
     double collectionTotal = 0;
 
-    // Ye keys fee_structures document mein hoti hain lekin actual fee
-    // amount nahi hain — inhe total mein shamil nahi karna.
+    // These keys exist in the fee_structures document but are not actual
+    // fee amounts — do not include them in the total.
     const Set<String> nonFeeKeys = {
       'studentId',
       'name',
@@ -46,7 +46,7 @@ class _FeeDashboardState extends State<FeeDashboard> {
     };
 
     try {
-      // 1. Fee Structures ka sum (jo bhi fields maujood hon — default ya custom)
+      // 1. Sum of Fee Structures (whatever fields exist — default or custom)
       var feeSnapshot = await schoolCollection('fee_structures').get();
 
       for (var doc in feeSnapshot.docs) {
@@ -57,7 +57,7 @@ class _FeeDashboardState extends State<FeeDashboard> {
         });
       }
 
-      // 2. Total Collection (History se)
+      // 2. Total Collection (from History)
       var historySnapshot = await schoolCollection('fee_history').get();
       for (var doc in historySnapshot.docs) {
         var val = doc.data()['amountPaid'] ?? 0;

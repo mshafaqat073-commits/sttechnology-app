@@ -48,8 +48,8 @@ class _HistoryPageState extends State<HistoryPage> {
     }
   }
 
-  // Ye default fields hain — inhi ki tarteeb pehle dikhai jayegi.
-  // Koi bhi naya custom field automatically inke baad list ho jayega.
+  // These are the default fields — they are shown in this order first.
+  // Any new custom field is automatically listed after these.
   static const List<String> _defaultFieldOrder = [
     'monthlyFee',
     'admissionFee',
@@ -73,7 +73,7 @@ class _HistoryPageState extends State<HistoryPage> {
     return [...known, ...extra];
   }
 
-  // camelCase field name ko readable label me convert karta hai
+  // Converts a camelCase field name into a readable label
   String _formatFieldLabel(String key) {
     if (key.isEmpty) return key;
     String spaced =
@@ -81,11 +81,11 @@ class _HistoryPageState extends State<HistoryPage> {
     return spaced[0].toUpperCase() + spaced.substring(1);
   }
 
-  // Detail dialog ke andar "Fee Breakdown" section banata hai. Naye
-  // records mein har field ka Paid + Remaining dono dikhata hai (jaise
-  // jaise partial payment hui waise hi). Purane records (jinke paas sirf
-  // 'restoredFees' hai) ke liye sirf "Paid" dikhaya jata hai kyunke us
-  // waqt fields hamesha poori pay hoti thin.
+  // Builds the "Fee Breakdown" section inside the detail dialog. For
+  // new records, shows both Paid + Remaining for each field (matching
+  // however the partial payment went). For old records (which only
+  // have 'restoredFees'), only "Paid" is shown, since at that time
+  // fields were always paid in full.
   List<Widget> _buildFeeBreakdownSection(Map<String, dynamic> data) {
     bool isNewSchema = data.containsKey('paidBreakdown');
 
@@ -159,8 +159,8 @@ class _HistoryPageState extends State<HistoryPage> {
       ));
     }
 
-    // Previous dues ki row bhi breakdown mein dikhayein (agar us waqt
-    // kuch pay kiya gaya tha)
+    // Also show the Previous Dues row in the breakdown (if something
+    // was paid toward it at that time)
     double duesPaid = (data['duesPaid'] ?? 0).toDouble();
     if (isNewSchema && duesPaid > 0) {
       double duesRemaining = (remainingMap['dues'] is num)
@@ -203,10 +203,10 @@ class _HistoryPageState extends State<HistoryPage> {
       double amountPaid = (data['amountPaid'] ?? 0).toDouble();
       double discount = (data['discount'] ?? 0).toDouble();
 
-      // Naye records mein 'paidBreakdown' hota hai (har field mein kitna
-      // paid hua). Purane records (naye system se pehle ke) mein sirf
-      // 'restoredFees' hota tha (jab har field hamesha poori pay hoti thi)
-      // — us purane data ko bhi restore karne ke liye fallback rakha hai.
+      // New records have 'paidBreakdown' (how much was paid for each
+      // field). Old records (from before this new system) only had
+      // 'restoredFees' (from when every field was always paid in full)
+      // — a fallback is kept to restore that old data too.
       bool isNewSchema = data.containsKey('paidBreakdown');
       Map<String, dynamic> paidBreakdown = isNewSchema
           ? Map<String, dynamic>.from(data['paidBreakdown'] ?? {})
@@ -257,8 +257,8 @@ class _HistoryPageState extends State<HistoryPage> {
                   Map<String, dynamic>.from(currentFeeData);
 
               paidBreakdown.forEach((key, value) {
-                // Meta fields (studentId, name, class, waghera) numbers nahi
-                // hoti — inhe skip karein taake toDouble() crash na kare.
+                // Meta fields (studentId, name, class, etc.) aren't numbers
+                // — skip them so toDouble() doesn't crash.
                 if (value is! num) return;
                 double historyVal = value.toDouble();
                 if (historyVal > 0) {
@@ -275,10 +275,10 @@ class _HistoryPageState extends State<HistoryPage> {
 
             if (studentSnap.exists) {
               double currentDues = (studentSnap.get('dues') ?? 0).toDouble();
-              // Payment ke waqt jitna 'discount' diya gaya tha, wo bhi
-              // dues mein wapis jama hona chahiye — warna discount ka
-              // amount kahin ghayab ho jata hai (na fee_structure mein,
-              // na dues mein).
+              // Whatever 'discount' was given at the time of payment
+              // must also be added back to dues — otherwise the discount
+              // amount disappears entirely (neither in fee_structure,
+              // nor in dues).
               double amountToDues;
               if (isNewSchema) {
                 double duesPaid = (data['duesPaid'] ?? 0).toDouble();
@@ -344,7 +344,7 @@ class _HistoryPageState extends State<HistoryPage> {
     }
   }
 
-  // Record ki receipt PDF banata hai aur share/print karne ke liye khol deta hai
+  // Generates a record's receipt PDF and opens it for sharing/printing
   Future<void> _generateReceiptPdf(
     BuildContext context, {
     required Map<String, dynamic> data,
@@ -724,7 +724,7 @@ class _HistoryPageState extends State<HistoryPage> {
                 return const Center(child: Text("No record found!"));
               }
 
-              // Selected month ka filter apply karna (agar lagaya gaya ho)
+              // Apply the selected month filter (if one was set)
               if (_selectedMonth != null) {
                 allDocs = allDocs.where((doc) {
                   var data = doc.data() as Map<String, dynamic>;
@@ -741,9 +741,9 @@ class _HistoryPageState extends State<HistoryPage> {
                     child: Text("No record found for this month!"));
               }
 
-              // Search bar se filter — student name, father name, class,
-              // income source ya description mein se kisi bhi field mein
-              // match hone par record dikhayein.
+              // Filter using the search bar — show the record if the query
+              // matches any of: student name, father name, class, income
+              // source, or description.
               if (_searchQuery.trim().isNotEmpty) {
                 final searchTerm = _searchQuery.trim().toLowerCase();
                 allDocs = allDocs.where((doc) {
@@ -784,11 +784,11 @@ class _HistoryPageState extends State<HistoryPage> {
                   var doc = allDocs[index];
                   var data = doc.data() as Map<String, dynamic>;
 
-                  // Check karein ke record kis collection ka hai
+                  // Check which collection this record belongs to
                   bool isOtherIncome =
                       doc.reference.path.contains('other_incomes');
 
-                  // Agar other income hai toh 'incomeSource' field show hogi, warna student ka 'name'
+                  // If it's other income, show the 'incomeSource' field, otherwise the student's 'name'
                   String name = isOtherIncome
                       ? (data['incomeSource'] ?? 'Other Income')
                       : (data['name'] ?? 'Unknown');
@@ -796,7 +796,7 @@ class _HistoryPageState extends State<HistoryPage> {
                   String className =
                       data['class'] ?? (isOtherIncome ? 'Other Source' : 'N/A');
 
-                  // Amount fetch karne ke liye (other_incomes mein 'amountPaid' hai)
+                  // To fetch the amount (other_incomes has 'amountPaid')
                   double amount =
                       (data['amountPaid'] ?? data['amount'] ?? 0).toDouble();
 

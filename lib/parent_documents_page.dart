@@ -19,7 +19,7 @@ Future<void> _openOrDownload(BuildContext context, String url) async {
   final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
   if (!ok && context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Document link nahi khul saka.")),
+      const SnackBar(content: Text("Could not open the document link.")),
     );
   }
 }

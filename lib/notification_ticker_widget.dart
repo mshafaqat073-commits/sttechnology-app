@@ -4,10 +4,10 @@ import 'dart:async';
 import 'school_context.dart';
 
 /// ============================================================
-/// NOTIFICATION TICKER (news ki tarah scrolling bar)
+/// NOTIFICATION TICKER (a scrolling bar like a news ticker)
 /// ============================================================
 ///
-/// USAGE (apni Dashboard page mein):
+/// USAGE (in your Dashboard page):
 ///
 ///   final List<String> _notifications = [];
 ///
@@ -30,13 +30,13 @@ import 'school_context.dart';
 ///
 /// ============================================================
 
-/// Scrolling ticker bar — top par news ki tarah chalti rahegi
+/// Scrolling ticker bar — keeps scrolling at the top like a news ticker
 class NotificationTickerBar extends StatefulWidget {
   final List<String> notifications;
   final Color backgroundColor;
   final Color textColor;
   final double height;
-  final Duration speed; // kitni fast/slow scroll ho
+  final Duration speed; // how fast/slow the scroll is
 
   const NotificationTickerBar({
     super.key,
@@ -103,7 +103,7 @@ class _NotificationTickerBarState extends State<NotificationTickerBar> {
       return const SizedBox.shrink();
     }
 
-    // Sab notifications ko ek single line mein jod dete hain (separator ke sath)
+    // Join all notifications into a single line (with a separator)
     final combinedText = widget.notifications.join("      •      ");
 
     return Container(
@@ -196,10 +196,10 @@ Future<String?> showAddNotificationDialog(
 /// ============================================================
 /// MANAGE NOTIFICATIONS PAGE
 /// ============================================================
-/// Notification button dabane pr ye page khulti hai — sab
-/// existing notifications list mein dikhti hain, har ek ko
-/// edit (pencil) ya delete (trash) kiya ja sakta hai, aur "+"
-/// button se naya notification add kiya ja sakta hai.
+/// This page opens when the Notification button is pressed — all
+/// existing notifications are shown in a list, each can be
+/// edited (pencil) or deleted (trash), and a new notification can
+/// be added with the "+" button.
 class ManageNotificationsPage extends StatelessWidget {
   const ManageNotificationsPage({super.key});
 

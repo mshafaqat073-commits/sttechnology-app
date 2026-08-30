@@ -164,11 +164,11 @@ class _PromoteStudentsPageState extends State<PromoteStudentsPage> {
     }
   }
 
-  // Class 10 (ya jo bhi list ki last class ho) ke wo students jo aage
-  // promote nahi ho sakte (koi "next class" nahi hai) — unki active
-  // status khatam kar deta hai (status: 'graduated'), taake wo baqi
-  // active-student reports/lists mein na aayein. SLC/left ki tarah,
-  // sirf status field update hota hai — record delete nahi hota.
+  // For students in Class 10 (or whichever is the list's last class) who
+  // can't be promoted any further (there's no "next class") — ends their
+  // active status (status: 'graduated'), so they no longer appear in
+  // other active-student reports/lists. Like SLC/left, only the status
+  // field is updated — the record isn't deleted.
   Future<void> _confirmAndDeactivateFinalClass() async {
     if (_finalClassDocs.isEmpty) return;
     if (!await SubscriptionGuard.ensureActive(context)) return;

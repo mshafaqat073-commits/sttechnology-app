@@ -11,9 +11,9 @@ class ParentAdmissionViewPage extends StatelessWidget {
   const ParentAdmissionViewPage(
       {super.key, required this.studentId, required this.data});
 
-  // Ye keys fee_structures document mein hoti hain lekin actual fee amount
-  // nahi hain — inhe kabhi bhi total mein shamil nahi karna.
-  // (pay_fee_page.dart ki _nonFeeKeys ke sath match honi chahiye)
+  // These keys exist in the fee_structures document but are not actual
+  // fee amounts — never include them in the total.
+  // (Should match pay_fee_page.dart's _nonFeeKeys)
   static const Set<String> _nonFeeKeys = {
     'studentId',
     'name',
@@ -24,10 +24,10 @@ class ParentAdmissionViewPage extends StatelessWidget {
     'docId',
   };
 
-  // fee_structures doc ke saare fee fields jama karke + student ke
-  // 'dues' field (pichli baqaya raqam) ko add karke asal current dues
-  // nikalta he — bilkul waisi hi calculation jaisi PayFeePage admin
-  // side par karta he, taake donon jagah number match ho.
+  // Gets the actual current dues by summing all fee fields in the
+  // fee_structures doc + adding the student's 'dues' field (previous
+  // outstanding amount) — the exact same calculation PayFeePage does on
+  // the admin side, so the number matches in both places.
   double _computeTotalDues(Map<String, dynamic>? feeData) {
     double previousDues = double.tryParse(data['dues']?.toString() ?? '0') ?? 0;
 
@@ -72,9 +72,9 @@ class ParentAdmissionViewPage extends StatelessWidget {
         backgroundColor: Colors.indigo[700],
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        // fee_structures live sunte hain taake current dues hamesha
-        // sahi (aur admin ki PayFeePage jaisi hi) figure dikhaye —
-        // sirf purani 'dues' field par depend nahi karte.
+        // Listen to fee_structures live so current dues always shows
+        // the correct figure (matching admin's PayFeePage) — not relying
+        // only on the old 'dues' field.
         stream: schoolCollection('fee_structures')
             .doc(studentId)
             .snapshots(),

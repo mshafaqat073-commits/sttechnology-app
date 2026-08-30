@@ -15,9 +15,9 @@ class ViewResultPage extends StatefulWidget {
 }
 
 class _ViewResultPageState extends State<ViewResultPage> {
-  // Stream ek dafa bana lete hain — pehle build() ke andar seedha banta
-  // tha, is liye kisi bhi setState (filter/dropdown change) par
-  // Firestore se dobara connect ho jata tha.
+  // Build the stream once — previously it was created directly inside
+  // build(), so any setState (filter/dropdown change) reconnected to
+  // Firestore.
   late final Stream<QuerySnapshot> _resultsStream =
       schoolCollection('results').snapshots();
 
@@ -511,9 +511,9 @@ class _ViewResultPageState extends State<ViewResultPage> {
             1;
     if (rank <= 0) rank = 1;
 
-    // "Promoted / Not Promoted" sirf Final Term ke result card mein
-    // dikhna chahiye — First Term, Mid Term, ya Weekly Test mein nahi,
-    // kyunke promotion ka faisla sirf final paper ke baad hota hai.
+    // "Promoted / Not Promoted" should only appear on the Final Term
+    // result card — not First Term, Mid Term, or Weekly Test — since
+    // the promotion decision is only made after the final paper.
     bool isFinalTerm = termName.trim().toLowerCase() == 'final term';
     bool isPromoted = percentage >= 40.0;
     String promotionStatus =

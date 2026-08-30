@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'school_context.dart';
 import 'performance_bar_chart.dart';
 import 'teacher_performance_page.dart';
 
-/// Admin > Reports > "Teachers Performance" — har staff member ki apni
-/// attendance % + un ki assigned class(es) ka result avg % + remark, ek
-/// list mein. Tap karne par wahi detail page khulta hai jo Teacher
-/// Dashboard se "My Performance" par khulta hai — koi duplicate detail
-/// page nahi banaya.
+/// Admin > Reports > "Teachers Performance" — each staff member's own
+/// attendance % + their assigned class(es)' result avg % + a remark, all
+/// in one list. Tapping opens the same detail page that also opens from
+/// the Teacher Dashboard's "My Performance" — no duplicate detail page
+/// was created.
 ///
-/// Data existing collections/fields se:
+/// Data comes from existing collections/fields:
 ///   staff              (name, designation, assignedClasses/assignedClass)
 ///   teacher_attendance (teacherId, status)
 ///   results            (class, section, percentage)
@@ -75,8 +78,8 @@ class _AdminTeacherPerformanceReportPageState
       attendanceByTeacher.putIfAbsent(tid, () => []).add(d);
     }
 
-    // class|section -> result docs, taake har staff ki assigned class(es)
-    // ke sath jaldi match ho jaye.
+    // class|section -> result docs, so each staff member's assigned
+    // class(es) can be matched quickly.
     final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>
         resultsByClassSection = {};
     for (var d in resultsSnap.docs) {
@@ -84,7 +87,7 @@ class _AdminTeacherPerformanceReportPageState
       final cls = (data['class'] ?? '').toString();
       final sec = (data['section'] ?? '').toString().trim();
       resultsByClassSection.putIfAbsent('$cls|$sec', () => []).add(d);
-      // Section-less bucket bhi, agar teacher ki assigned section khali ho
+      // Also a section-less bucket, in case the teacher's assigned section is empty
       resultsByClassSection.putIfAbsent('$cls|', () => []).add(d);
     }
 
@@ -137,12 +140,202 @@ class _AdminTeacherPerformanceReportPageState
     return rows;
   }
 
+  String _classLabelOf(_StaffPerformanceRow r) {
+    return r.assignedClasses.isEmpty
+        ? "No class assigned"
+        : r.assignedClasses
+            .map((a) => (a['section'] ?? '').isNotEmpty
+                ? "${a['class']} - ${a['section']}"
+                : (a['class'] ?? ''))
+            .join(", ");
+  }
+
+  /// Simple text-only remark for the PDF (kept independent of
+  /// PerformanceRemark's icon/color widget fields, which don't translate
+  /// to a printed page).
+  String _remarkText(double? attendance, double? result) {
+    if (attendance == null && result == null) return 'No Data';
+    final scores = <double>[
+      if (attendance != null) attendance,
+      if (result != null) result,
+    ];
+    final avg = scores.reduce((a, b) => a + b) / scores.length;
+    if (avg >= 85) return 'Excellent';
+    if (avg >= 70) return 'Good';
+    if (avg >= 50) return 'Average';
+    return 'Needs Attention';
+  }
+
+  /// Builds a table PDF for the currently filtered list of staff and opens
+  /// the native preview/print sheet.
+  Future<void> _exportPdf(List<_StaffPerformanceRow> rows) async {
+    final doc = pw.Document();
+
+    final headers = [
+      'Name',
+      'Designation',
+      'Assigned Class(es)',
+      'Attendance %',
+      'Result %',
+      'Remark',
+    ];
+
+    final data = rows.map((r) {
+      return [
+        r.name,
+        r.designation,
+        _classLabelOf(r),
+        r.attendancePercent != null
+            ? '${r.attendancePercent!.toStringAsFixed(0)}%'
+            : 'N/A',
+        r.avgResultPercent != null
+            ? '${r.avgResultPercent!.toStringAsFixed(0)}%'
+            : 'N/A',
+        _remarkText(r.attendancePercent, r.avgResultPercent),
+      ];
+    }).toList();
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        header: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'Teachers Performance Report',
+              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 8),
+          ],
+        ),
+        build: (context) => [
+          pw.TableHelper.fromTextArray(
+            headers: headers,
+            data: data,
+            headerStyle: pw.TextStyle(
+              fontWeight: pw.FontWeight.bold,
+              fontSize: 10,
+              color: PdfColors.white,
+            ),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.deepPurple800),
+            cellStyle: const pw.TextStyle(fontSize: 9),
+            cellAlignment: pw.Alignment.centerLeft,
+            cellAlignments: {
+              3: pw.Alignment.center,
+              4: pw.Alignment.center,
+            },
+            border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+          ),
+        ],
+        footer: (context) => pw.Align(
+          alignment: pw.Alignment.centerRight,
+          child: pw.Text(
+            'Page ${context.pageNumber} of ${context.pagesCount}',
+            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+          ),
+        ),
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => doc.save(),
+      name: 'Teachers_Performance_Report.pdf',
+    );
+  }
+
+  /// Builds a single-page detail PDF for one teacher/staff member and
+  /// opens the native preview/print sheet.
+  Future<void> _exportSinglePdf(_StaffPerformanceRow r) async {
+    final doc = pw.Document();
+
+    doc.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'Teacher Performance Report',
+              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 16),
+            pw.Text(r.name,
+                style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 4),
+            pw.Text('Designation: ${r.designation}',
+                style: const pw.TextStyle(fontSize: 12)),
+            pw.SizedBox(height: 4),
+            pw.Text('Assigned Class(es): ${_classLabelOf(r)}',
+                style: const pw.TextStyle(fontSize: 12)),
+            pw.SizedBox(height: 20),
+            pw.TableHelper.fromTextArray(
+              headers: const ['Metric', 'Value'],
+              data: [
+                [
+                  'Attendance %',
+                  r.attendancePercent != null
+                      ? '${r.attendancePercent!.toStringAsFixed(0)}%'
+                      : 'N/A',
+                ],
+                [
+                  'Class Result Avg %',
+                  r.avgResultPercent != null
+                      ? '${r.avgResultPercent!.toStringAsFixed(0)}%'
+                      : 'N/A',
+                ],
+                ['Remark', _remarkText(r.attendancePercent, r.avgResultPercent)],
+              ],
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 11,
+                color: PdfColors.white,
+              ),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.deepPurple800),
+              cellStyle: const pw.TextStyle(fontSize: 11),
+              border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => doc.save(),
+      name: 'Teacher_Performance_${r.name.replaceAll(' ', '_')}.pdf',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Teachers Performance"),
         backgroundColor: Colors.teal[800],
+        actions: [
+          FutureBuilder<List<_StaffPerformanceRow>>(
+            future: _future,
+            builder: (context, snapshot) {
+              final rows = snapshot.data;
+              final canExport = snapshot.connectionState == ConnectionState.done &&
+                  rows != null;
+              return IconButton(
+                icon: const Icon(Icons.picture_as_pdf),
+                tooltip: "Preview / Print PDF (All)",
+                onPressed: canExport
+                    ? () {
+                        final filtered = _searchQuery.isEmpty
+                            ? rows
+                            : rows
+                                .where((r) =>
+                                    r.name.toLowerCase().contains(_searchQuery))
+                                .toList();
+                        _exportPdf(filtered);
+                      }
+                    : null,
+              );
+            },
+          ),
+        ],
       ),
       body: FutureBuilder<List<_StaffPerformanceRow>>(
         future: _future,
@@ -219,13 +412,7 @@ class _AdminTeacherPerformanceReportPageState
       hasAttendance: r.attendancePercent != null,
       hasResults: r.avgResultPercent != null,
     );
-    final classLabel = r.assignedClasses.isEmpty
-        ? "No class assigned"
-        : r.assignedClasses
-            .map((a) => (a['section'] ?? '').isNotEmpty
-                ? "${a['class']} - ${a['section']}"
-                : (a['class'] ?? ''))
-            .join(", ");
+    final classLabel = _classLabelOf(r);
 
     return Card(
       elevation: 1,
@@ -243,30 +430,41 @@ class _AdminTeacherPerformanceReportPageState
         title: Text(r.name, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text("${r.designation}  •  $classLabel"),
         isThreeLine: false,
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Icon(remark.icon, size: 14, color: remark.color),
-                const SizedBox(width: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(remark.icon, size: 14, color: remark.color),
+                    const SizedBox(width: 4),
+                    Text(
+                      r.attendancePercent != null
+                          ? "${r.attendancePercent!.toStringAsFixed(0)}% att"
+                          : "No att.",
+                      style: TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold, color: remark.color),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
                 Text(
-                  r.attendancePercent != null
-                      ? "${r.attendancePercent!.toStringAsFixed(0)}% att"
-                      : "No att.",
-                  style: TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.bold, color: remark.color),
+                  r.avgResultPercent != null
+                      ? "${r.avgResultPercent!.toStringAsFixed(0)}% class avg"
+                      : "No result",
+                  style: const TextStyle(fontSize: 11, color: Colors.black54),
                 ),
               ],
             ),
-            const SizedBox(height: 2),
-            Text(
-              r.avgResultPercent != null
-                  ? "${r.avgResultPercent!.toStringAsFixed(0)}% class avg"
-                  : "No result",
-              style: const TextStyle(fontSize: 11, color: Colors.black54),
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf, size: 20),
+              color: Colors.deepPurple.shade700,
+              tooltip: "Export PDF for ${r.name}",
+              onPressed: () => _exportSinglePdf(r),
             ),
           ],
         ),

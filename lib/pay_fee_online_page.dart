@@ -3,19 +3,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'school_context.dart';
 
-/// Parent ye page se apni fee online (Easypaisa ya UBL Bank) jama
-/// karwata he. Ab admin ki PayFeePage ki tarah har fee field (Monthly
-/// Fee, Books, Uniform waghera) alag se dikhti he apni "Due" amount ke
-/// sath, aur parent har field ke against jitni marzi amount likh sakta
-/// he (jaise "Books: Due 1000, Paid 500") — poori ya partial, jo bhi
-/// wo abhi submit karna chahta he. Total inhi fields ka jama ban ke
-/// "Amount to Submit" mein show hota he.
+/// Parents pay their fee online here (Easypaisa or UBL Bank). Like the
+/// admin's PayFeePage, each fee field (Monthly Fee, Books, Uniform, etc.)
+/// is shown separately with its own "Due" amount, and the parent can
+/// enter any amount against each field (e.g. "Books: Due 1000, Paid
+/// 500") — full or partial, whatever they want to submit right now.
+/// The sum of these fields is shown as "Amount to Submit".
 ///
-/// Submit karne ke baad entry 'fee_payments' collection mein 'pending'
-/// status ke sath jati he (sath hi 'fieldBreakdown' bhi save hoti he ke
-/// kis field mein kitna diya) — jab tak admin (FeePaymentVerificationPage
-/// se) usse Approve na kare tab tak dues automatically kam nahi hoti,
-/// taake fake ya galat entries se dues na bigड़ें.
+/// After submitting, the entry goes into the 'fee_payments' collection
+/// with 'pending' status (along with a saved 'fieldBreakdown' of how
+/// much was given for which field) — dues aren't reduced automatically
+/// until the admin approves it (via FeePaymentVerificationPage), so
+/// fake or incorrect entries can't corrupt the dues.
 class PayFeeOnlinePage extends StatefulWidget {
   final String studentId;
   final String studentName;
@@ -37,16 +36,17 @@ class PayFeeOnlinePage extends StatefulWidget {
 }
 
 class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
-  // Note: pehle yahan developer ka apna Easypaisa/UBL account hardcoded
-  // tha, phir sirf do fixed fields (Easypaisa + UBL) the — ab school
-  // Settings > "Online Payment Accounts" se jitne chahe accounts (JazzCash,
-  // Easypaisa, bank account, ya koi aur method) add kar sakta he, aur
-  // SchoolContext.paymentAccounts se yehi list yahan seedha dikhai jati
-  // he, taake jab ye app kisi bhi school/customer ko diya jaye to fee
-  // unke apne account(s) mein jaye, developer ke account mein nahi.
+  // Note: this used to have the developer's own Easypaisa/UBL account
+  // hardcoded, then just two fixed fields (Easypaisa + UBL) — now the
+  // school can add as many accounts as it wants (JazzCash, Easypaisa,
+  // bank account, or any other method) from Settings > "Online Payment
+  // Accounts", and that same list is shown here directly from
+  // SchoolContext.paymentAccounts, so that whenever this app is given
+  // to any school/customer, fees go into their own account(s), not the
+  // developer's account.
 
-  // Method ke hisab se card ka icon/color choose karta hai — koi bhi
-  // custom method ho to default wallet icon dikhta he.
+  // Picks the card's icon/color based on the method — any custom method
+  // falls back to the default wallet icon.
   IconData _iconForMethod(String method) {
     final m = method.toLowerCase();
     if (m.contains('jazzcash')) return Icons.phone_android;
@@ -63,10 +63,10 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
     return Colors.teal;
   }
 
-  // Ye keys fee_structures document mein hoti hain lekin actual fee amount
-  // nahi hain (student info / timestamps hain) — inhe kabhi bhi fee list
-  // ya total mein shamil nahi karna. (pay_fee_page.dart admin side ki
-  // tarah hi.)
+  // These keys exist in the fee_structures document but aren't actual
+  // fee amounts (they're student info / timestamps) — never include
+  // these in the fee list or total. (Same as the admin side in
+  // pay_fee_page.dart.)
   static const Set<String> _nonFeeKeys = {
     'studentId',
     'name',
@@ -77,7 +77,7 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
     'docId',
   };
 
-  // Ye default fields hain — inhi ki tarteeb pehle dikhai jayegi.
+  // These are the default fields — they're shown first, in this order.
   static const List<String> _defaultFieldOrder = [
     'monthlyFee',
     'admissionFee',
@@ -111,7 +111,7 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
         : ["JazzCash", "Easypaisa", "Bank Account", "Other"];
   }
 
-  // Har fee field ke liye alag "Paid" input — key = field name.
+  // A separate "Paid" input per fee field — key = field name.
   final Map<String, TextEditingController> _paidControllers = {};
   final TextEditingController _duesPaidController =
       TextEditingController(text: '0');
@@ -119,11 +119,12 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
   DocumentSnapshot? _feeDoc;
   bool _loadingFee = true;
 
-  // Asal "Previous Dues" hamesha students/{studentId} ke 'dues' field se
-  // seedha fetch ki jati hai — widget.currentDues (jo iss page ko bahar se
-  // milta hai) par bharosa nahi karte, kyunke wo kabhi kabhi galat/duplicate
-  // (jaise fee_structure fields ke sath dobara jama shuda) amount le kar
-  // aa sakta he. Yehi tareeqa pay_fee_page.dart (admin) bhi use karta hai.
+  // The actual "Previous Dues" is always fetched directly from the
+  // students/{studentId} 'dues' field — we don't rely on
+  // widget.currentDues (which is passed into this page from outside),
+  // because it can sometimes carry a wrong/duplicated amount (e.g.
+  // summed again with the fee_structure fields). This is the same
+  // approach pay_fee_page.dart (admin) uses.
   double _actualPreviousDues = 0;
 
   @override
@@ -144,9 +145,9 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
 
   Future<void> _loadData() async {
     try {
-      // Do alag documents (fee_structures aur students) ek sath parallel
-      // mangwate hain — pehle ye sequentially (ek ke baad ek) load hote
-      // the, jo bila wajah 2 network round-trips ka time leta tha.
+      // Fetch the two separate documents (fee_structures and students)
+      // in parallel — these used to load sequentially (one after the
+      // other), which needlessly took the time of 2 network round-trips.
       final results = await Future.wait([
         schoolCollection('fee_structures').doc(widget.studentId).get(),
         schoolCollection('students').doc(widget.studentId).get(),
@@ -171,9 +172,9 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
     }
   }
 
-  // Har fee field ke liye "Paid" controller taiyar karta hai — default
-  // poori due amount se bhara hota hai (jaisa admin side pe hota hai),
-  // parent chahe to kam kar sakta he.
+  // Sets up a "Paid" controller for each fee field — it's filled with
+  // the full due amount by default (like on the admin side), and the
+  // parent can lower it if they want.
   void _initPaidControllers() {
     for (var c in _paidControllers.values) {
       c.dispose();
@@ -219,8 +220,8 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
     return double.tryParse(feeData[field]?.toString() ?? '0') ?? 0;
   }
 
-  // Field ke against jitni amount pay ki ja rahi hai — kabhi bhi due se
-  // zyada ya 0 se kam nahi ho sakti.
+  // The amount being paid against this field — can never be more than
+  // the due amount or less than 0.
   double _paidFor(String field) {
     double due = _fieldDue(field);
     double input = double.tryParse(_paidControllers[field]?.text ?? '0') ?? 0;
@@ -237,7 +238,7 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
     return feeData.keys.where((f) => !_nonFeeKeys.contains(f)).toList();
   }
 
-  // Sab fields ka jama + previous dues jo abhi submit ki ja rahi hai.
+  // Sum of all fields + previous dues currently being submitted.
   double get _totalToPay {
     double total = _feeFieldKeys.fold(0.0, (sum, f) => sum + _paidFor(f));
     total += _duesPaidApplied();
@@ -287,9 +288,9 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
         'class': widget.className,
         'section': widget.section,
         'amount': _totalToPay,
-        // Har field ke against parent ne kitni amount submit ki — admin
-        // isi se verify karke wapis fee_structures/dues mein munha
-        // karega (pay_fee_page.dart ki tarah).
+        // How much the parent submitted against each field — the admin
+        // verifies this and deducts it from fee_structures/dues
+        // accordingly (same as pay_fee_page.dart).
         'fieldBreakdown': {for (var f in _feeFieldKeys) f: _paidFor(f)},
         'duesPaid': _duesPaidApplied(),
         'method': _method ?? _methodOptions.first,
@@ -357,9 +358,9 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
     );
   }
 
-  // Ek fee field (ya previous dues) ke liye row: label, due amount, aur
-  // editable "amount submitting" box — pay_fee_page.dart ke
-  // _feeFieldRow jesa hi.
+  // Row for one fee field (or previous dues): label, due amount, and
+  // an editable "amount submitting" box — same as _feeFieldRow in
+  // pay_fee_page.dart.
   Widget _feeFieldRow(String? field, {bool isDuesRow = false}) {
     final double due = isDuesRow ? _actualPreviousDues : _fieldDue(field!);
     final TextEditingController controller =
@@ -453,8 +454,8 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        "School ne abhi apna payment account set nahi "
-                        "kiya — admin se rabta karein (Settings > Online "
+                        "The school hasn't set up a payment account yet "
+                        "— please contact the admin (Settings > Online "
                         "Payment Account).",
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
@@ -633,7 +634,7 @@ class _PayFeeOnlinePageState extends State<PayFeeOnlinePage> {
               }
               final docs = snapshot.data!.docs;
 
-              // Client-side sorting taake naye records pehle nazar aayein (bina index ke)
+              // Client-side sorting so newest records show first (no index needed)
               docs.sort((a, b) {
                 final aTime = (a.data() as Map<String, dynamic>)['submittedAt'];
                 final bTime = (b.data() as Map<String, dynamic>)['submittedAt'];

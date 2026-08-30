@@ -16,9 +16,9 @@ class FeeCollectionReportPage extends StatefulWidget {
 }
 
 class _FeeCollectionReportPageState extends State<FeeCollectionReportPage> {
-  // null = "All" (filter lagi hui nahi). Month sirf tab lagta hai jab
-  // year bhi select ho — is se "sirf month" (bina year) select karna
-  // possible nahi rehta, jo ambiguous ho sakta tha.
+  // null = "All" (no filter applied). Month is only applied when the
+  // year is also selected — this prevents selecting "just month"
+  // (without year), which could have been ambiguous.
   int? _filterYear;
   int? _filterMonth;
 
@@ -27,7 +27,7 @@ class _FeeCollectionReportPageState extends State<FeeCollectionReportPage> {
     'July', 'August', 'September', 'October', 'November', 'December',
   ];
 
-  // Pichle 5 saal se agle saal tak — is dropdown mein dikhane ke liye.
+  // From the last 5 years to next year — to show in this dropdown.
   List<int> get _yearOptions {
     final currentYear = DateTime.now().year;
     return List.generate(7, (i) => currentYear + 1 - i);
@@ -48,7 +48,7 @@ class _FeeCollectionReportPageState extends State<FeeCollectionReportPage> {
     return "${_monthNames[_filterMonth! - 1]} $_filterYear";
   }
 
-  // Ye default fields hain — inhi ki tarteeb pehle dikhai jayegi.
+  // These are the default fields — they are shown in this order first.
   static const List<String> _defaultFieldOrder = [
     'monthlyFee',
     'admissionFee',
@@ -72,7 +72,7 @@ class _FeeCollectionReportPageState extends State<FeeCollectionReportPage> {
     return [...known, ...extra];
   }
 
-  // camelCase field name ko readable label me convert karta hai
+  // Converts a camelCase field name into a readable label
   String _formatFieldLabel(String key) {
     if (key.isEmpty) return key;
     String spaced =
@@ -104,9 +104,9 @@ class _FeeCollectionReportPageState extends State<FeeCollectionReportPage> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // Agar Firestore query fail ho rahi he (missing index,
-          // permission-denied, waghera) to error yahan saaf dikhayenge —
-          // pehle ye chup ke "no records" ke peeche chup jata tha.
+          // If the Firestore query fails (missing index,
+          // permission-denied, etc.) the error is now shown clearly here —
+          // previously it silently hid behind a "no records" message.
           if (snapshot.hasError) {
             return Center(
               child: Padding(
@@ -132,14 +132,14 @@ class _FeeCollectionReportPageState extends State<FeeCollectionReportPage> {
             );
           }
 
-          // Month/Year filter apply karte hain (dono ya sirf year, ya
-          // "All Time" — dekhein _matchesFilter).
+          // Apply the Month/Year filter (both, or year only, or
+          // "All Time" — see _matchesFilter).
           var docs = snapshot.data!.docs.where((doc) {
             var data = doc.data() as Map<String, dynamic>;
             return _matchesFilter(data['date'] as Timestamp?);
           }).toList();
 
-          // Total Collected Amount calculate karna (filtered docs par)
+          // Calculate the Total Collected Amount (on the filtered docs)
           double totalCollected = 0;
           for (var doc in docs) {
             var data = doc.data() as Map<String, dynamic>;
@@ -354,8 +354,8 @@ class _FeeCollectionReportPageState extends State<FeeCollectionReportPage> {
     );
   }
 
-  // Month/Year filter bar — Year select karne ke baad hi Month enabled
-  // hota hai (bina year ke sirf month select karna ambiguous hota).
+  // Month/Year filter bar — Month is only enabled after Year is
+  // selected (selecting only month without year would be ambiguous).
   Widget _buildFilterBar() {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
@@ -384,7 +384,7 @@ class _FeeCollectionReportPageState extends State<FeeCollectionReportPage> {
                 onChanged: (val) {
                   setState(() {
                     _filterYear = val;
-                    _filterMonth = null; // year badalte hi month reset
+                    _filterMonth = null; // reset month as soon as year changes
                   });
                 },
               ),
@@ -397,7 +397,7 @@ class _FeeCollectionReportPageState extends State<FeeCollectionReportPage> {
                 isExpanded: true,
                 value: _filterMonth,
                 hint: const Text("Month: All"),
-                // Year select kiye bina month filter maayne nahi rakhta.
+                // The month filter has no meaning without a year selected.
                 onChanged: _filterYear == null
                     ? null
                     : (val) => setState(() => _filterMonth = val),
@@ -420,9 +420,9 @@ class _FeeCollectionReportPageState extends State<FeeCollectionReportPage> {
     );
   }
 
-  // PDF Generation Function — sirf abhi filtered (screen par dikh rahe)
-  // records ke liye PDF banata hai, taake PDF bhi usi month/year ka ho
-  // jo user ne select kiya hai.
+  // PDF Generation Function — generates the PDF only for the currently
+  // filtered (visible on screen) records, so the PDF matches the same
+  // month/year the user selected.
   Future<void> _generateAndPrintPdf(BuildContext context) async {
     final pdf = pw.Document();
 

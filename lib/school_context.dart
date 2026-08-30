@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 ///
 /// The Firestore structure is now:
 ///   schools/{schoolId}                     -> basic school info
-///   schools/{schoolId}/settings/global      -> schoolName, address, logoUrl
+///   schools/{schoolId}/settings/global      -> schoolName, principalName, address, logoUrl
 ///   schools/{schoolId}/students/{id}
 ///   schools/{schoolId}/staff/{id}
 ///   schools/{schoolId}/users/{id}           -> admin login (username/password)
@@ -20,6 +20,7 @@ class SchoolContext {
   static String? _logoUrl;
   static String? _contactNumber;
   static String? _contactEmail;
+  static String? _principalName;
 
   /// School's own online payment accounts (JazzCash, Easypaisa, bank
   /// account, or any other method) — set from Settings > "Online Payment
@@ -50,11 +51,10 @@ class SchoolContext {
   static String? get schoolName => _schoolName;
   static String? get logoUrl => _logoUrl;
 
-  /// Is school ka apna WhatsApp/contact number — Settings > WhatsApp
-  /// Number se set kiya jata hai. Har school apna number khud add karta
-  /// hai; jahan bhi app mein school ka contact number dikhana/use karna
-  /// ho (AI chat, SLC, letterhead waghera), wahan hardcoded number ki
-  /// jagah yehi field use karein.
+  /// This school's own WhatsApp/contact number — set from Settings >
+  /// WhatsApp Number. Each school adds its own number; wherever the app
+  /// needs to show/use the school's contact number (AI chat, SLC,
+  /// letterhead, etc.), use this field instead of a hardcoded number.
   static String? get contactNumber => _contactNumber;
 
   /// This school's own contact email — Settings > Contact Email. Same
@@ -62,6 +62,12 @@ class SchoolContext {
   /// use an email address (reports, letterhead, AI chat, etc.), it should
   /// read this field instead of a hardcoded address.
   static String? get contactEmail => _contactEmail;
+
+  /// This school's own principal name — Settings > Principal Name. Same
+  /// pattern as contactNumber/contactEmail above: wherever the app needs
+  /// to show or use the principal's name (AI chat, letterhead, etc.), it
+  /// should read this field instead of a hardcoded name.
+  static String? get principalName => _principalName;
   static bool get isSet => _schoolId != null;
 
   /// This school's own online payment accounts — set from Settings >
@@ -95,11 +101,13 @@ class SchoolContext {
       final logo = (data?['logoUrl'] as String?)?.trim();
       final contact = (data?['contactNumber'] as String?)?.trim();
       final email = (data?['contactEmail'] as String?)?.trim();
+      final principal = (data?['principalName'] as String?)?.trim();
       final rawAccounts = data?['paymentAccounts'] as List<dynamic>?;
       _schoolName = (name != null && name.isNotEmpty) ? name : null;
       _logoUrl = (logo != null && logo.isNotEmpty) ? logo : null;
       _contactNumber = (contact != null && contact.isNotEmpty) ? contact : null;
       _contactEmail = (email != null && email.isNotEmpty) ? email : null;
+      _principalName = (principal != null && principal.isNotEmpty) ? principal : null;
       _paymentAccounts = (rawAccounts ?? [])
           .map((e) => Map<String, String>.from(
               (e as Map).map((k, v) => MapEntry(k.toString(), (v ?? '').toString()))))
@@ -108,6 +116,17 @@ class SchoolContext {
     } catch (_) {
       // Network issue etc. — keep whatever is already cached.
     }
+    _version.value++;
+  }
+
+  /// Applies a logo URL that was cached locally (SharedPreferences) from
+  /// the last successful login — used on the Admin Login screen so it
+  /// can show that school's logo again before this login even starts,
+  /// without doing any Firestore call. Does NOT touch schoolName, so the
+  /// Role Selector's generic app name (see lib/app_branding.dart) is
+  /// never affected by this.
+  static void applyCachedPreLoginLogo(String? url) {
+    _logoUrl = (url != null && url.isNotEmpty) ? url : null;
     _version.value++;
   }
 
@@ -123,6 +142,11 @@ class SchoolContext {
   /// school, any one of them may be returned (order is not guaranteed) —
   /// this app is designed assuming one deployment per school, so in
   /// practice there is virtually always just one school.
+  ///
+  /// NOT currently called anywhere (kept for reference/future use) —
+  /// the app now uses applyCachedPreLoginLogo() + the locally saved
+  /// "last logged-in school" logo instead, so the Role Selector always
+  /// shows the generic app name/logo until an actual login happens.
   static Future<void> loadPreLoginBranding() async {
     try {
       final snap = await FirebaseFirestore.instance
@@ -152,6 +176,7 @@ class SchoolContext {
     _logoUrl = null;
     _contactNumber = null;
     _contactEmail = null;
+    _principalName = null;
     _paymentAccounts = [];
     _version.value++;
   }

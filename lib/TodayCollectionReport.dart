@@ -17,10 +17,10 @@ class TodayCollectionReport extends StatefulWidget {
 class _TodayCollectionReportState extends State<TodayCollectionReport> {
   bool isLoading = false;
 
-  // Ye default fields hain — inhi ki tarteeb pehle dikhai jayegi.
-  // Koi bhi naya custom field (set_fee_page se add kiya gaya) automatically
-  // inke baad list ho jayega — same pattern jo history_page/pay_fee_page
-  // mein use hota hai, taake naya field yahan bhi khud-b-khud aa jaye.
+  // These are the default fields — they are shown in this order first.
+  // Any new custom field (added from set_fee_page) is automatically listed
+  // after these — same pattern used in history_page/pay_fee_page, so a new
+  // field shows up here automatically too.
   static const List<String> _defaultFieldOrder = [
     'monthlyFee',
     'admissionFee',
@@ -44,12 +44,38 @@ class _TodayCollectionReportState extends State<TodayCollectionReport> {
     return [...known, ...extra];
   }
 
-  // camelCase field name ko readable label me convert karta hai
+  // Converts a camelCase field name into a readable label
   String _formatFieldLabel(String key) {
     if (key.isEmpty) return key;
     String spaced =
         key.replaceAllMapped(RegExp(r'([A-Z])'), (m) => ' ${m.group(0)}');
     return spaced[0].toUpperCase() + spaced.substring(1);
+  }
+
+  // Matches a 'date' or 'timestamp' field against today's date — both
+  // fee_history and other_incomes collections are filtered using this same
+  // logic, so this common helper covers both.
+  bool _isToday(dynamic dateValue, DateTime now, String todayStandard) {
+    if (dateValue == null) return false;
+
+    if (dateValue is Timestamp) {
+      DateTime dt = dateValue.toDate();
+      return DateFormat('yyyy-MM-dd').format(dt) == todayStandard;
+    }
+
+    String dateStr = dateValue.toString().toLowerCase();
+    String monthStr = DateFormat('MMMM').format(now).toLowerCase(); // july
+    String yearStr = now.year.toString(); // 2026
+    String todayDayNum = now.day.toString();
+
+    // Check if date string contains current year, month name, and day number
+    bool matchesFull = dateStr.contains(yearStr) &&
+        dateStr.contains(monthStr) &&
+        (dateStr.contains(" $todayDayNum ") ||
+            dateStr.contains(", $todayDayNum") ||
+            dateStr.contains("$todayDayNum,"));
+
+    return dateStr.contains(todayStandard) || matchesFull;
   }
 
   Future<void> _generateTodayCollectionPdf() async {
@@ -60,8 +86,6 @@ class _TodayCollectionReportState extends State<TodayCollectionReport> {
       String todayStandard = DateFormat('yyyy-MM-dd').format(now); // 2026-07-26
       String todayMonthName =
           DateFormat('MMMM d, yyyy').format(now); // July 26, 2026
-      String todayDayNum =
-          now.day.toString(); // 26 (ya single digit ke liye bhi check)
 
       var snapshot =
           await schoolCollection('fee_history').get();
@@ -69,32 +93,28 @@ class _TodayCollectionReportState extends State<TodayCollectionReport> {
       var docs = snapshot.docs.where((d) {
         var data = d.data() as Map<String, dynamic>? ?? {};
         var dateValue = data['date'] ?? data['timestamp'];
-
-        if (dateValue == null) return false;
-
-        if (dateValue is Timestamp) {
-          DateTime dt = dateValue.toDate();
-          return DateFormat('yyyy-MM-dd').format(dt) == todayStandard;
-        }
-
-        String dateStr = dateValue.toString().toLowerCase();
-        String monthStr = DateFormat('MMMM').format(now).toLowerCase(); // july
-        String yearStr = now.year.toString(); // 2026
-
-        // Check if date string contains current year, month name, and day number
-        bool matchesFull = dateStr.contains(yearStr) &&
-            dateStr.contains(monthStr) &&
-            (dateStr.contains(" $todayDayNum ") ||
-                dateStr.contains(", $todayDayNum") ||
-                dateStr.contains("$todayDayNum,"));
-
-        return dateStr.contains(todayStandard) || matchesFull;
+        return _isToday(dateValue, now, todayStandard);
       }).toList();
 
+      // Other Incomes collection (rent, donations, etc.) — included here the
+      // same way profit_loss_report_page.dart does, otherwise Other Income
+      // was completely missing from this report.
+      List<QueryDocumentSnapshot> otherIncomeDocs = [];
+      try {
+        var otherSnapshot = await schoolCollection('other_incomes').get();
+        otherIncomeDocs = otherSnapshot.docs.where((d) {
+          var data = d.data() as Map<String, dynamic>? ?? {};
+          var dateValue = data['date'] ?? data['timestamp'];
+          return _isToday(dateValue, now, todayStandard);
+        }).toList();
+      } catch (e) {
+        debugPrint("Other Incomes Error: $e");
+      }
+
       double totalAmount = 0;
-      // Field-wise (monthlyFee, admissionFee, ..., aur koi bhi custom field)
-      // totals — 'restoredFees' map fee_history ke har doc mein pay_fee_page
-      // ne save kiya hota hai, wahi se breakdown nikal rahe hain.
+      // Field-wise (monthlyFee, admissionFee, ..., plus any custom field)
+      // totals — the 'restoredFees' map is saved by pay_fee_page on every
+      // fee_history doc, and the breakdown is derived from it.
       Map<String, double> fieldTotals = {};
 
       for (var doc in docs) {
@@ -113,6 +133,18 @@ class _TodayCollectionReportState extends State<TodayCollectionReport> {
           fieldTotals[f] = (fieldTotals[f] ?? 0) + val;
         }
       }
+
+      double otherIncomeTotal = 0;
+      for (var doc in otherIncomeDocs) {
+        var data = doc.data() as Map<String, dynamic>? ?? {};
+        double amount = double.tryParse(
+                (data['amountPaid'] ?? data['amount'] ?? data['paid'] ?? '0')
+                    .toString()) ??
+            0;
+        otherIncomeTotal += amount;
+      }
+
+      double grandTotal = totalAmount + otherIncomeTotal;
 
       final pdf = pw.Document();
       pdf.addPage(
@@ -145,15 +177,38 @@ class _TodayCollectionReportState extends State<TodayCollectionReport> {
                 border: pw.Border.all(color: PdfColors.grey400),
                 borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5)),
               ),
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text("Total Transactions: ${docs.length}",
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                  pw.Text("Total Collection: Rs. $totalAmount",
-                      style: pw.TextStyle(
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.green700)),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text(
+                          "Total Transactions: ${docs.length + otherIncomeDocs.length}",
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    ],
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text("Fee Collection: Rs. $totalAmount"),
+                      pw.Text("Other Income: Rs. $otherIncomeTotal"),
+                    ],
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Divider(color: PdfColors.grey400),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text("Grand Total:",
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text("Rs. $grandTotal",
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.green700)),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -196,6 +251,34 @@ class _TodayCollectionReportState extends State<TodayCollectionReport> {
                       "Rs. ${fieldTotals[f]!.toStringAsFixed(0)}"
                     ],
                 ],
+                headerStyle:
+                    pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+                cellStyle: const pw.TextStyle(fontSize: 10),
+                headerDecoration:
+                    const pw.BoxDecoration(color: PdfColors.grey300),
+              ),
+            ],
+            if (otherIncomeDocs.isNotEmpty) ...[
+              pw.SizedBox(height: 15),
+              pw.Text("Other Income",
+                  style: pw.TextStyle(
+                      fontSize: 13, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 5),
+              pw.Table.fromTextArray(
+                headers: ['Sr.', 'Description', 'Category', 'Amount'],
+                data: List.generate(otherIncomeDocs.length, (i) {
+                  var d =
+                      otherIncomeDocs[i].data() as Map<String, dynamic>? ?? {};
+                  return [
+                    "${i + 1}",
+                    d['title'] ??
+                        d['description'] ??
+                        d['source'] ??
+                        'Other Income',
+                    d['category'] ?? 'N/A',
+                    "Rs. ${d['amountPaid'] ?? d['amount'] ?? d['paid'] ?? '0'}"
+                  ];
+                }),
                 headerStyle:
                     pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
                 cellStyle: const pw.TextStyle(fontSize: 10),

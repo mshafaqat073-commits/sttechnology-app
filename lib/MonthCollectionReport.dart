@@ -17,10 +17,10 @@ class MonthCollectionReport extends StatefulWidget {
 class _MonthCollectionReportState extends State<MonthCollectionReport> {
   bool isLoading = false;
 
-  // Ye default fields hain — inhi ki tarteeb pehle dikhai jayegi.
-  // Koi bhi naya custom field (set_fee_page se add kiya gaya) automatically
-  // inke baad list ho jayega — same pattern jo history_page/pay_fee_page
-  // mein use hota hai, taake naya field yahan bhi khud-b-khud aa jaye.
+  // These are the default fields — they are shown in this order first.
+  // Any new custom field (added from set_fee_page) is automatically listed
+  // after these — same pattern used in history_page/pay_fee_page, so a new
+  // field shows up here automatically too.
   static const List<String> _defaultFieldOrder = [
     'monthlyFee',
     'admissionFee',
@@ -44,7 +44,7 @@ class _MonthCollectionReportState extends State<MonthCollectionReport> {
     return [...known, ...extra];
   }
 
-  // camelCase field name ko readable label me convert karta hai
+  // Converts a camelCase field name into a readable label
   String _formatFieldLabel(String key) {
     if (key.isEmpty) return key;
     String spaced =
@@ -52,7 +52,7 @@ class _MonthCollectionReportState extends State<MonthCollectionReport> {
     return spaced[0].toUpperCase() + spaced.substring(1);
   }
 
-  // Date ko clean aur readable format mein convert karne ke liye helper function
+  // Helper function to convert a date into a clean, readable format
   String _formatDate(dynamic dateValue) {
     if (dateValue == null) return 'N/A';
 
@@ -63,7 +63,7 @@ class _MonthCollectionReportState extends State<MonthCollectionReport> {
       }
 
       String str = dateValue.toString();
-      // Agar date pehle se standard format mein hai toh usko parse karke readable banayein
+      // If the date is already in a standard format, parse it and make it readable
       DateTime? parsedDate = DateTime.tryParse(str);
       if (parsedDate != null) {
         return DateFormat('dd MMM yyyy').format(parsedDate);
@@ -75,7 +75,7 @@ class _MonthCollectionReportState extends State<MonthCollectionReport> {
     }
   }
 
-  // Raw date string ya sorting ke liye standard key nikalna (yyyy-MM-dd)
+  // Derives a standard sort key (yyyy-MM-dd) from a raw date string
   String _getDateKey(dynamic dateValue) {
     if (dateValue == null) return 'Unknown Date';
     try {
@@ -87,7 +87,7 @@ class _MonthCollectionReportState extends State<MonthCollectionReport> {
       if (parsedDate != null) {
         return DateFormat('yyyy-MM-dd').format(parsedDate);
       }
-      // Agar text format mein ho toh pehle 10 characters (yyyy-MM-dd) uthane ki koshish
+      // If it's a plain text format, try taking the first 10 characters (yyyy-MM-dd)
       if (str.length >= 10) {
         return str.substring(0, 10);
       }
@@ -95,6 +95,24 @@ class _MonthCollectionReportState extends State<MonthCollectionReport> {
     } catch (e) {
       return 'Unknown Date';
     }
+  }
+
+  // Matches a 'date' or 'timestamp' field against the current month — both
+  // fee_history and other_incomes collections are filtered using this same
+  // logic, so this common helper covers both.
+  bool _isInMonth(dynamic dateValue, String currentMonthPrefix,
+      String monthNameStr, String yearStr) {
+    if (dateValue == null) return false;
+
+    if (dateValue is Timestamp) {
+      DateTime dt = dateValue.toDate();
+      return DateFormat('yyyy-MM').format(dt) == currentMonthPrefix;
+    }
+
+    String dateStr = dateValue.toString().toLowerCase();
+
+    return dateStr.contains(currentMonthPrefix) ||
+        (dateStr.contains(monthNameStr) && dateStr.contains(yearStr));
   }
 
   Future<void> _generateMonthCollectionPdf() async {
@@ -113,27 +131,32 @@ class _MonthCollectionReportState extends State<MonthCollectionReport> {
       var docs = snapshot.docs.where((d) {
         var data = d.data() as Map<String, dynamic>? ?? {};
         var dateValue = data['date'] ?? data['timestamp'];
-
-        if (dateValue == null) return false;
-
-        if (dateValue is Timestamp) {
-          DateTime dt = dateValue.toDate();
-          return DateFormat('yyyy-MM').format(dt) == currentMonthPrefix;
-        }
-
-        String dateStr = dateValue.toString().toLowerCase();
-
-        return dateStr.contains(currentMonthPrefix) ||
-            (dateStr.contains(monthNameStr) && dateStr.contains(yearStr));
+        return _isInMonth(dateValue, currentMonthPrefix, monthNameStr, yearStr);
       }).toList();
+
+      // Other Incomes collection (rent, donations, etc.) — included here the
+      // same way profit_loss_report_page.dart does, otherwise Other Income
+      // was completely missing from this report.
+      List<QueryDocumentSnapshot> otherIncomeDocsRaw = [];
+      try {
+        var otherSnapshot = await schoolCollection('other_incomes').get();
+        otherIncomeDocsRaw = otherSnapshot.docs.where((d) {
+          var data = d.data() as Map<String, dynamic>? ?? {};
+          var dateValue = data['date'] ?? data['timestamp'];
+          return _isInMonth(
+              dateValue, currentMonthPrefix, monthNameStr, yearStr);
+        }).toList();
+      } catch (e) {
+        debugPrint("Other Incomes Error: $e");
+      }
 
       // --- Date-wise Grouping & Sorting ---
       Map<String, List<Map<String, dynamic>>> groupedData = {};
-      double grandTotal = 0;
-      // Field-wise (monthlyFee, admissionFee, ..., aur koi bhi custom field)
-      // totals for the whole month — 'restoredFees' map fee_history ke har
-      // doc mein pay_fee_page ne save kiya hota hai, wahi se breakdown
-      // nikal rahe hain (same pattern jo history_page use karta hai).
+      double feeGrandTotal = 0;
+      // Field-wise (monthlyFee, admissionFee, ..., plus any custom field)
+      // totals for the whole month — the 'restoredFees' map is saved by
+      // pay_fee_page on every fee_history doc, and the breakdown is derived
+      // from it (same pattern history_page uses).
       Map<String, double> fieldTotals = {};
 
       for (var doc in docs) {
@@ -148,7 +171,7 @@ class _MonthCollectionReportState extends State<MonthCollectionReport> {
                 (data['amountPaid'] ?? data['amount'] ?? data['paid'] ?? '0')
                     .toString()) ??
             0;
-        grandTotal += amount;
+        feeGrandTotal += amount;
 
         Map<String, dynamic> restoredFees = data['restoredFees'] != null
             ? Map<String, dynamic>.from(data['restoredFees'])
@@ -159,8 +182,31 @@ class _MonthCollectionReportState extends State<MonthCollectionReport> {
         }
       }
 
-      // Dates ko sort karna (ascending order mein: purani date pehle, nayi baad mein ya vice versa)
+      // Other Income is also grouped by date, so it can be shown by date
+      // the same way fee collections are.
+      Map<String, List<Map<String, dynamic>>> otherIncomeGrouped = {};
+      double otherIncomeGrandTotal = 0;
+
+      for (var doc in otherIncomeDocsRaw) {
+        var data = doc.data() as Map<String, dynamic>? ?? {};
+        var rawDate = data['date'] ?? data['timestamp'];
+        String dateKey = _getDateKey(rawDate);
+
+        otherIncomeGrouped.putIfAbsent(dateKey, () => []);
+        otherIncomeGrouped[dateKey]!.add(data);
+
+        double amount = double.tryParse(
+                (data['amountPaid'] ?? data['amount'] ?? data['paid'] ?? '0')
+                    .toString()) ??
+            0;
+        otherIncomeGrandTotal += amount;
+      }
+
+      double combinedGrandTotal = feeGrandTotal + otherIncomeGrandTotal;
+
+      // Sort the dates (ascending order: oldest date first, newest last)
       var sortedKeys = groupedData.keys.toList()..sort();
+      var otherIncomeSortedKeys = otherIncomeGrouped.keys.toList()..sort();
 
       final pdf = pw.Document();
 
@@ -200,15 +246,34 @@ class _MonthCollectionReportState extends State<MonthCollectionReport> {
                   borderRadius:
                       const pw.BorderRadius.all(pw.Radius.circular(5)),
                 ),
-                child: pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text("Total Transactions: ${docs.length}",
+                    pw.Text(
+                        "Total Transactions: ${docs.length + otherIncomeDocsRaw.length}",
                         style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                    pw.Text("Grand Total: Rs. $grandTotal",
-                        style: pw.TextStyle(
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.green700)),
+                    pw.SizedBox(height: 6),
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text("Fee Collection: Rs. $feeGrandTotal"),
+                        pw.Text("Other Income: Rs. $otherIncomeGrandTotal"),
+                      ],
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.Divider(color: PdfColors.grey400),
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text("Grand Total:",
+                            style:
+                                pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                        pw.Text("Rs. $combinedGrandTotal",
+                            style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.green700)),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -247,7 +312,7 @@ class _MonthCollectionReportState extends State<MonthCollectionReport> {
             } else {
               int globalSr = 1;
 
-              // Har date ka alag table aur subtotal banana
+              // Build a separate table and subtotal for each date
               for (String dateKey in sortedKeys) {
                 var records = groupedData[dateKey]!;
                 String readableDate = _formatDate(
@@ -295,6 +360,85 @@ class _MonthCollectionReportState extends State<MonthCollectionReport> {
                 );
 
                 // Subtotal for this specific date
+                widgets.add(
+                  pw.Container(
+                    alignment: pw.Alignment.centerRight,
+                    padding: const pw.EdgeInsets.symmetric(
+                        vertical: 5, horizontal: 8),
+                    decoration: const pw.BoxDecoration(
+                      color: PdfColors.grey200,
+                    ),
+                    child: pw.Text(
+                      "Subtotal ($readableDate): Rs. $dateSubTotal",
+                      style: pw.TextStyle(
+                          fontSize: 10,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.green800),
+                    ),
+                  ),
+                );
+                widgets.add(pw.SizedBox(height: 10));
+              }
+            }
+
+            // Other Income section, grouped and sub-totaled by date the
+            // same way the fee section above is.
+            if (otherIncomeGrouped.isNotEmpty) {
+              widgets.add(pw.SizedBox(height: 10));
+              widgets.add(pw.Text("Other Income",
+                  style: pw.TextStyle(
+                      fontSize: 14, fontWeight: pw.FontWeight.bold)));
+              widgets.add(pw.SizedBox(height: 5));
+
+              int otherIncomeSr = 1;
+
+              for (String dateKey in otherIncomeSortedKeys) {
+                var records = otherIncomeGrouped[dateKey]!;
+                String readableDate = _formatDate(
+                    records.first['date'] ?? records.first['timestamp']);
+
+                double dateSubTotal = 0;
+                for (var r in records) {
+                  dateSubTotal += double.tryParse(
+                          (r['amountPaid'] ?? r['amount'] ?? r['paid'] ?? '0')
+                              .toString()) ??
+                      0;
+                }
+
+                widgets.add(
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(top: 10, bottom: 5),
+                    child: pw.Text("Date: $readableDate",
+                        style: pw.TextStyle(
+                            fontSize: 13,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.teal800)),
+                  ),
+                );
+
+                widgets.add(
+                  pw.Table.fromTextArray(
+                    headers: ['Sr.', 'Description', 'Category', 'Amount'],
+                    data: List.generate(records.length, (i) {
+                      var r = records[i];
+                      return [
+                        "${otherIncomeSr++}",
+                        r['title'] ??
+                            r['description'] ??
+                            r['source'] ??
+                            'Other Income',
+                        r['category'] ?? 'N/A',
+                        "Rs. ${r['amountPaid'] ?? r['amount'] ?? r['paid'] ?? '0'}"
+                      ];
+                    }),
+                    headerStyle: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold, fontSize: 10),
+                    cellStyle: const pw.TextStyle(fontSize: 10),
+                    headerDecoration:
+                        const pw.BoxDecoration(color: PdfColors.grey300),
+                  ),
+                );
+
                 widgets.add(
                   pw.Container(
                     alignment: pw.Alignment.centerRight,

@@ -7,10 +7,10 @@ import 'school_context.dart';
 /// ============================================================
 /// TEACHER-ONLY NOTIFICATIONS (admin side)
 /// ============================================================
-/// Ye general "notifications" collection se ALAG collection use
-/// karta hai ('teacher_notifications'), taake ye sirf teacher
-/// dashboard par dikhe — parents ya general public ticker par
-/// kabhi nahi aayega.
+/// This uses a SEPARATE collection from the general "notifications"
+/// collection ('teacher_notifications'), so it only shows up on the
+/// teacher dashboard — it will never appear on the parents' or general
+/// public ticker.
 ///
 /// USAGE (admin dashboard AppBar mein):
 ///

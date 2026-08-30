@@ -32,6 +32,16 @@ String currentSchoolContactEmail() {
   return (email != null && email.isNotEmpty) ? email : '';
 }
 
+/// The current (logged-in) school's principal name — set from Settings >
+/// Principal Name. AI Chat gets the principal's name from this same
+/// function (no single school's name is hardcoded), so every school can
+/// show its own principal name correctly in AI Chat. If the school hasn't
+/// added a principal name yet, an empty string is returned.
+String currentSchoolPrincipalName() {
+  final name = SchoolContext.principalName;
+  return (name != null && name.isNotEmpty) ? name : '';
+}
+
 /// Kisi bhi UI screen mein current school ka logo dikhane ke liye —
 /// Settings > School Logo se upload kiya hua custom logo (agar set hai)
 /// warna default bundled logo.

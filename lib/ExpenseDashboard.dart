@@ -17,7 +17,7 @@ class ExpenseDashboard extends StatelessWidget {
       return pw.Column(children: [
         pw.Text("Expense Report",
             style: pw.TextStyle(
-                // <-- const yahan se hata diya
+                // <-- const removed here
                 fontSize: 25,
                 fontWeight: pw.FontWeight.bold)),
         pw.Table.fromTextArray(

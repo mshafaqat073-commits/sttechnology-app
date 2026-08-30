@@ -8,35 +8,35 @@ import 'secrets.dart';
 // ============================================================================
 // NotificationHelper
 // ----------------------------------------------------------------------------
-// Admin/teacher ki taraf se koi bhi action ho — diary entry, homework,
-// special message, fee reminder waghera — is helper ko call karein.
+// For any action from admin/teacher's side — diary entry, homework,
+// special message, fee reminder, etc. — call this helper.
 //
-// Ye do kaam karta hai:
-//   1) 'push_notifications' collection mein ek document likhta he — isay
-//      app ke andar "Notifications" (bell icon) list ke liye use karte
-//      hain. Ye Firestore ka normal free-tier read/write he, koi billing
-//      nahi chahiye.
-//   2) Diya gaya FCM token(s) par seedha push notification bhejta he —
-//      Cloud Function ki jagah ek FREE Google Apps Script web app ko call
-//      kar ke (apps_script_fcm_relay.gs), taake Blaze (paid) plan ki
-//      zaroorat na pare.
+// It does two things:
+//   1) Writes a document into the 'push_notifications' collection —
+//      used for the app's "Notifications" (bell icon) list. This is a
+//      normal Firestore free-tier read/write, no billing needed.
+//   2) Sends a push notification directly to the given FCM token(s) —
+//      by calling a FREE Google Apps Script web app
+//      (apps_script_fcm_relay.gs) instead of a Cloud Function, so the
+//      Blaze (paid) plan isn't needed.
 //
-// SETUP: neeche _pushEndpoint aur _sharedSecret mein apni Apps Script
-// deployment ki values daalein (apps_script_fcm_relay.gs ke comments mein
-// pura tareeqa likha hua he).
+// SETUP: fill in your Apps Script deployment values in _pushEndpoint
+// and _sharedSecret below (the full steps are written in
+// apps_script_fcm_relay.gs's comments).
 // ============================================================================
 
 class NotificationHelper {
-  // Ye dono ab lib/secrets.dart mein hain — wo file GitHub par kabhi
-  // nahi jati (.gitignore mein he), isliye yahan hardcode nahi kiye.
+  // Both of these now live in lib/secrets.dart — that file never goes
+  // to GitHub (it's in .gitignore), so they're not hardcoded here.
   static const String _pushEndpoint = notificationEndpoint;
   static const String _sharedSecret = notificationSharedSecret;
 
   static final _col =
       schoolCollection('push_notifications');
 
-  /// Diye gaye FCM tokens ko seedha push notification bhejta he. Ye
-  /// helper ke andar hi call hota he — bahar se seedha use nahi karna.
+  /// Sends a push notification directly to the given FCM tokens. This
+  /// is only called from within this helper — don't use it directly
+  /// from outside.
   static Future<void> _pushToTokens({
     required List<String> tokens,
     required String title,
@@ -52,14 +52,14 @@ class NotificationHelper {
     try {
       final res = await http.post(
         Uri.parse(_pushEndpoint),
-        // Content-Type 'text/plain' jaan-boojh kar rakha hai — 'application/json'
-        // browser se cross-origin request bhejte waqt ek "preflight" (OPTIONS)
-        // request trigger karta he, jo Google Apps Script handle nahi karta aur
-        // "Failed to fetch" (CORS) error deta he. 'text/plain' ek "simple
-        // request" ginta he, isliye preflight skip ho jata he. Apps Script
-        // (e.postData.contents) is content ko phir bhi sahi JSON ki tarah
-        // parse kar leta he — sirf header ka naam badla he, actual data JSON
-        // hi bhej rahe hain.
+        // Content-Type is deliberately kept as 'text/plain' —
+        // 'application/json' triggers a "preflight" (OPTIONS) request when
+        // sending a cross-origin request from the browser, which Google
+        // Apps Script doesn't handle and gives a "Failed to fetch" (CORS)
+        // error. 'text/plain' counts as a "simple request", so preflight
+        // is skipped. Apps Script (e.postData.contents) still parses this
+        // content correctly as JSON — only the header name changed, the
+        // actual data being sent is still JSON.
         headers: {'Content-Type': 'text/plain;charset=utf-8'},
         body: jsonEncode({
           'secret': _sharedSecret,
@@ -75,10 +75,10 @@ class NotificationHelper {
     }
   }
 
-  /// Ek student/teacher ko notification (push + in-app history dono).
-  /// [fcmToken] agar maloom ho (jese caller ne already doc fetch kiya ho)
-  /// to zaroor pass karein — warna sirf in-app history bane gi, push nahi
-  /// jayegi.
+  /// Sends a notification to one student/teacher (both push + in-app
+  /// history). If [fcmToken] is known (e.g. the caller already fetched
+  /// the doc), be sure to pass it — otherwise only in-app history is
+  /// created, no push is sent.
   static Future<void> sendToUser({
     required String toId,
     required String toRole, // 'student' | 'teacher'
@@ -105,12 +105,12 @@ class NotificationHelper {
     }
   }
 
-  /// Ek se zyada students/teachers ko ek sath bhejne ke liye — jaise
-  /// poori class ko diary notification.
+  /// For sending to multiple students/teachers at once — e.g. a diary
+  /// notification to an entire class.
   ///
-  /// [targets] har entry {'id': doc id, 'token': fcmToken-ya-null} —
-  /// caller ko ye pehle hi students/staff query se mil jata he, is liye
-  /// dobara Firestore call karne ki zaroorat nahi.
+  /// [targets] each entry is {'id': doc id, 'token': fcmToken-or-null} —
+  /// the caller already gets this from the students/staff query, so
+  /// there's no need for another Firestore call.
   static Future<void> sendToMultiple({
     required List<Map<String, String?>> targets,
     required String toRole,
@@ -121,7 +121,7 @@ class NotificationHelper {
   }) async {
     if (targets.isEmpty) return;
 
-    // In-app history: Firestore batch ki 500 writes/limit hoti he.
+    // In-app history: Firestore batch has a 500 writes limit.
     const chunkSize = 400;
     for (var i = 0; i < targets.length; i += chunkSize) {
       final chunk = targets.sublist(
@@ -142,10 +142,10 @@ class NotificationHelper {
       await batch.commit();
     }
 
-    // Actual push — sirf un students/teachers ko jinka fcmToken maloom he
-    // (jinhon ne kabhi app open/login nahi ki unka token nahi hoga, unko
-    // sirf in-app history milegi, jab wo login karenge tab se push milni
-    // shuru ho jayegi).
+    // Actual push — only to students/teachers whose fcmToken is known
+    // (those who have never opened/logged into the app won't have a
+    // token, they'll only get in-app history, and once they log in
+    // they'll start getting pushes too).
     final tokens = targets
         .map((t) => t['token'])
         .whereType<String>()

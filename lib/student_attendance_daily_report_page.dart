@@ -7,25 +7,25 @@ import 'school_branding.dart';
 import 'pdf_preview_helper.dart';
 import 'class_section_service.dart';
 
-/// Any class's attendance for a whole month — pick a class + a month and
-/// see, for every student in that class, how many days they were
-/// Present / Absent / on Leave that month (with a % attendance), plus a
+/// Any class's attendance for a single selected date — pick a class and a
+/// date and see, for every student in that class, whether they were
+/// Present / Absent / on Leave / Not Marked on that date, plus a
 /// printable PDF summary.
 ///
-/// This complements student_attendance_report_page.dart (which is a
-/// single-day snapshot across ALL classes) — this one is one class,
-/// summarised across an entire month.
-class StudentAttendanceMonthlyReportPage extends StatefulWidget {
-  const StudentAttendanceMonthlyReportPage({super.key});
+/// This complements student_attendance_monthly_report_page.dart (which
+/// summarises one class across an entire month) — this one is one class,
+/// snapshotted on a single chosen date.
+class StudentAttendanceDailyReportPage extends StatefulWidget {
+  const StudentAttendanceDailyReportPage({super.key});
 
   @override
-  State<StudentAttendanceMonthlyReportPage> createState() =>
-      _StudentAttendanceMonthlyReportPageState();
+  State<StudentAttendanceDailyReportPage> createState() =>
+      _StudentAttendanceDailyReportPageState();
 }
 
-class _StudentAttendanceMonthlyReportPageState
-    extends State<StudentAttendanceMonthlyReportPage> {
-  DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
+class _StudentAttendanceDailyReportPageState
+    extends State<StudentAttendanceDailyReportPage> {
+  DateTime _selectedDate = DateTime.now();
   String? _selectedClass;
   List<String> _classList = [];
   bool _loadingClasses = true;
@@ -46,31 +46,28 @@ class _StudentAttendanceMonthlyReportPageState
     });
   }
 
-  Future<void> _pickMonth() async {
+  Future<void> _pickDate() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedMonth,
+      initialDate: _selectedDate,
       firstDate: DateTime(2020),
       lastDate: DateTime(now.year + 1),
-      helpText: "Pick any date in the month",
+      helpText: "Pick a date",
     );
     if (picked != null) {
-      setState(() => _selectedMonth = DateTime(picked.year, picked.month));
+      setState(() => _selectedDate = picked);
     }
   }
 
-  // First and last day of _selectedMonth, formatted 'yyyy-MM-dd' — the
-  // attendance docs store 'date' as this same string format, so a plain
-  // lexicographic range query works correctly for a calendar month.
-  String get _monthStartStr => DateFormat('yyyy-MM-dd')
-      .format(DateTime(_selectedMonth.year, _selectedMonth.month, 1));
-  String get _monthEndStr => DateFormat('yyyy-MM-dd')
-      .format(DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0));
+  // _selectedDate formatted 'yyyy-MM-dd' — the attendance docs store
+  // 'date' as this same string format, so an equality query works
+  // correctly for a single calendar day.
+  String get _dateStr => DateFormat('yyyy-MM-dd').format(_selectedDate);
 
-  // Fetches the class's students + this month's attendance docs, and
-  // combines them into a per-student summary.
-  Future<List<Map<String, dynamic>>> _loadMonthlyData() async {
+  // Fetches the class's students + this date's attendance docs, and
+  // combines them into a per-student status for that day.
+  Future<List<Map<String, dynamic>>> _loadDailyData() async {
     if (_selectedClass == null) return [];
 
     final results = await Future.wait([
@@ -80,42 +77,31 @@ class _StudentAttendanceMonthlyReportPageState
           .get(),
       schoolCollection('attendance')
           .where('class', isEqualTo: _selectedClass)
-          .where('date', isGreaterThanOrEqualTo: _monthStartStr)
-          .where('date', isLessThanOrEqualTo: _monthEndStr)
+          .where('date', isEqualTo: _dateStr)
           .get(),
     ]);
 
     final studentsSnap = results[0];
     final attendanceSnap = results[1];
 
-    // studentId -> {present, absent, leave}
-    Map<String, Map<String, int>> counts = {};
+    // studentId -> status
+    Map<String, String> statusByStudent = {};
     for (var doc in attendanceSnap.docs) {
       var data = doc.data();
       String studentId = (data['studentId'] ?? '').toString();
       String status = (data['status'] ?? 'Present').toString();
-      counts.putIfAbsent(
-          studentId, () => {'Present': 0, 'Absent': 0, 'Leave': 0});
-      if (counts[studentId]!.containsKey(status)) {
-        counts[studentId]![status] = counts[studentId]![status]! + 1;
-      }
+      statusByStudent[studentId] = status;
     }
 
     List<Map<String, dynamic>> result = [];
     for (var doc in studentsSnap.docs) {
       var data = doc.data();
       String studentId = doc.id;
-      var c = counts[studentId] ?? {'Present': 0, 'Absent': 0, 'Leave': 0};
-      int marked = c['Present']! + c['Absent']! + c['Leave']!;
-      double pct = marked > 0 ? (c['Present']! / marked) * 100 : 0;
+      String status = statusByStudent[studentId] ?? 'Not Marked';
       result.add({
         'name': data['name']?.toString() ?? 'N/A',
         'rollNo': data['rollNo']?.toString() ?? '',
-        'present': c['Present']!,
-        'absent': c['Absent']!,
-        'leave': c['Leave']!,
-        'marked': marked,
-        'percent': pct,
+        'status': status,
       });
     }
 
@@ -133,11 +119,24 @@ class _StudentAttendanceMonthlyReportPageState
     return result;
   }
 
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'Present':
+        return Colors.green;
+      case 'Absent':
+        return Colors.red;
+      case 'Leave':
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Student Attendance Monthly"),
+        title: const Text("Student Attendance Daily"),
         backgroundColor: Colors.teal[800],
         actions: [
           IconButton(
@@ -187,7 +186,7 @@ class _StudentAttendanceMonthlyReportPageState
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      "Month: ${DateFormat('MMMM yyyy').format(_selectedMonth)}",
+                      "Date: ${DateFormat('dd MMM yyyy').format(_selectedDate)}",
                       style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -198,9 +197,9 @@ class _StudentAttendanceMonthlyReportPageState
                           backgroundColor: Colors.teal.shade700),
                       icon: const Icon(Icons.calendar_month,
                           color: Colors.white, size: 18),
-                      label: const Text("Change Month",
+                      label: const Text("Change Date",
                           style: TextStyle(color: Colors.white)),
-                      onPressed: _pickMonth,
+                      onPressed: _pickDate,
                     ),
                   ],
                 ),
@@ -212,27 +211,21 @@ class _StudentAttendanceMonthlyReportPageState
                 ? const Center(
                     child: Text("No class found. Add classes first."))
                 : FutureBuilder<List<Map<String, dynamic>>>(
-                    key: ValueKey('$_selectedClass-$_selectedMonth'),
-                    future: _loadMonthlyData(),
+                    key: ValueKey('$_selectedClass-$_dateStr'),
+                    future: _loadDailyData(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
                       }
-                      // FIX: previously any error thrown by the Firestore
-                      // query (most commonly a FAILED_PRECONDITION because
-                      // the compound query below — equality on 'class' +
-                      // range on 'date' — needs a composite index) was
-                      // silently swallowed by `snapshot.data ?? []`, so the
-                      // page just showed "No students found" even though
-                      // the attendance records existed. Now the real error
-                      // is shown, and Firestore's error text for a missing
-                      // index includes a direct link to create it.
+                      // Same fix as the monthly report page: surface real
+                      // Firestore errors (e.g. a missing composite index)
+                      // instead of silently falling back to an empty list.
                       if (snapshot.hasError) {
                         return Center(
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: Text(
-                              "ERROR loading monthly attendance:\n${snapshot.error}",
+                              "ERROR loading daily attendance:\n${snapshot.error}",
                               style: const TextStyle(
                                   color: Colors.red, fontSize: 13),
                             ),
@@ -267,16 +260,12 @@ class _StudentAttendanceMonthlyReportPageState
                               title: Text(s['name'],
                                   style: const TextStyle(
                                       fontWeight: FontWeight.bold)),
-                              subtitle: Text(
-                                  "Present: ${s['present']}  Absent: ${s['absent']}  Leave: ${s['leave']}  (Marked: ${s['marked']} day(s))"),
                               trailing: Text(
-                                "${(s['percent'] as double).toStringAsFixed(0)}%",
+                                s['status'],
                                 style: TextStyle(
-                                    color: (s['percent'] as double) >= 75
-                                        ? Colors.green
-                                        : Colors.red,
+                                    color: _statusColor(s['status']),
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 16),
+                                    fontSize: 14),
                               ),
                             ),
                           );
@@ -293,7 +282,7 @@ class _StudentAttendanceMonthlyReportPageState
   Future<void> _generateAndPrintPdf(BuildContext context) async {
     List<Map<String, dynamic>> list;
     try {
-      list = await _loadMonthlyData();
+      list = await _loadDailyData();
     } catch (e) {
       // Same fix as the on-screen FutureBuilder: don't let a Firestore
       // error (e.g. missing composite index) crash silently — tell the
@@ -305,7 +294,7 @@ class _StudentAttendanceMonthlyReportPageState
       }
       return;
     }
-    final monthLabel = DateFormat('MMMM yyyy').format(_selectedMonth);
+    final dateLabel = DateFormat('dd MMM yyyy').format(_selectedDate);
 
     final pdf = pw.Document();
     pdf.addPage(
@@ -322,27 +311,24 @@ class _StudentAttendanceMonthlyReportPageState
                   pw.Text(currentSchoolDisplayName(),
                       style: pw.TextStyle(
                           fontSize: 18, fontWeight: pw.FontWeight.bold)),
-                  pw.Text("Student Attendance Monthly",
+                  pw.Text("Student Attendance Daily",
                       style: pw.TextStyle(
                           fontSize: 14, fontWeight: pw.FontWeight.bold)),
                 ],
               ),
             ),
             pw.SizedBox(height: 6),
-            pw.Text("Class: $_selectedClass   |   Month: $monthLabel",
+            pw.Text("Class: $_selectedClass   |   Date: $dateLabel",
                 style:
                     pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 15),
             pw.Table.fromTextArray(
-              headers: ['Roll', 'Name', 'Present', 'Absent', 'Leave', '%'],
+              headers: ['Roll', 'Name', 'Status'],
               data: list
                   .map((s) => [
                         s['rollNo'].toString().isEmpty ? '-' : s['rollNo'],
                         s['name'],
-                        s['present'].toString(),
-                        s['absent'].toString(),
-                        s['leave'].toString(),
-                        "${(s['percent'] as double).toStringAsFixed(0)}%",
+                        s['status'],
                       ])
                   .toList(),
               headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
@@ -359,8 +345,8 @@ class _StudentAttendanceMonthlyReportPageState
     if (!context.mounted) return;
     await showPdfPreviewPage(
       context,
-      title: "Student Attendance Monthly Preview",
-      shareFileName: "attendance_${_selectedClass}_$monthLabel.pdf",
+      title: "Student Attendance Daily Preview",
+      shareFileName: "attendance_${_selectedClass}_$dateLabel.pdf",
       build: (PdfPageFormat format) async => pdf.save(),
     );
   }

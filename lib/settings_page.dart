@@ -225,7 +225,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   .set({fieldName: controller.text}, SetOptions(merge: true));
               if (fieldName == 'schoolName' ||
                   fieldName == 'contactNumber' ||
-                  fieldName == 'contactEmail') {
+                  fieldName == 'contactEmail' ||
+                  fieldName == 'principalName') {
                 // Refresh the cache immediately so the Dashboard/AI Chat/
                 // PDFs show the new name/number/email right away, without
                 // an app restart.
@@ -352,8 +353,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     items: _paymentMethodChoices
                         .map((m) => DropdownMenuItem(value: m, child: Text(m)))
                         .toList(),
-                    onChanged: (v) => setDialogState(
-                        () => selectedMethod = v ?? _paymentMethodChoices.first),
+                    onChanged: (v) => setDialogState(() =>
+                        selectedMethod = v ?? _paymentMethodChoices.first),
                   ),
                   if (selectedMethod == 'Other') ...[
                     const SizedBox(height: 8),
@@ -415,8 +416,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 if (mounted) {
                   Navigator.pop(context);
                   setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text("Payment account added!")));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Payment account added!")));
                 }
               },
               child: const Text("Add"),
@@ -590,8 +591,7 @@ class _SettingsPageState extends State<SettingsPage> {
       String jsonString = jsonEncode(fullBackup);
 
       String dateStamp = DateFormat('yyyy-MM-dd_HHmm').format(DateTime.now());
-      final fileName =
-          '${_fileNameSafeSchoolName()}_Backup_$dateStamp.json';
+      final fileName = '${_fileNameSafeSchoolName()}_Backup_$dateStamp.json';
       // Built directly from in-memory bytes — no temp file/directory
       // needed, so this works the same on web, Android, and desktop.
       final xfile = XFile.fromData(
@@ -635,8 +635,7 @@ class _SettingsPageState extends State<SettingsPage> {
       final bytes = await _buildBackupExcelBytes();
 
       String dateStamp = DateFormat('yyyy-MM-dd_HHmm').format(DateTime.now());
-      final fileName =
-          '${_fileNameSafeSchoolName()}_Backup_$dateStamp.xlsx';
+      final fileName = '${_fileNameSafeSchoolName()}_Backup_$dateStamp.xlsx';
       final xfile = XFile.fromData(
         bytes,
         mimeType:
@@ -1082,8 +1081,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
                       try {
                         await _performReset(
-                          onProgress: (done, total) =>
-                              progress.value = done,
+                          onProgress: (done, total) => progress.value = done,
                         );
                         if (mounted) {
                           // Pop via the stable rootContext's navigator —
@@ -1118,11 +1116,12 @@ class _SettingsPageState extends State<SettingsPage> {
             ));
   }
 
-  // Subscription renew karne ke liye ab poora flow SubscriptionPaymentPage
-  // mein hai: developer ke Easypaisa/UBL account dikhana, screenshot
-  // upload karwana, aur pending request Firestore mein daalna (jise Super
-  // Admin panel se approve/reject kiya jata he). Numbers ab sirf ek
-  // jagah (subscription_payment_page.dart) hardcoded hain.
+  // The whole flow for renewing a subscription is now in
+  // SubscriptionPaymentPage: showing the developer's Easypaisa/UBL
+  // account, having the screenshot uploaded, and putting a pending
+  // request into Firestore (which is approved/rejected from the Super
+  // Admin panel). The numbers are now hardcoded in just one place
+  // (subscription_payment_page.dart).
   void _showPayDeveloperDialog() {
     Navigator.push(
       context,
@@ -1153,8 +1152,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   padding: EdgeInsets.all(16),
                   child: Text(
                     "Payment History",
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                   ),
                 ),
                 const Divider(height: 1),
@@ -1180,8 +1178,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         );
                       }
                       if (!snap.hasData) {
-                        return const Center(
-                            child: CircularProgressIndicator());
+                        return const Center(child: CircularProgressIndicator());
                       }
                       final docs = snap.data!.docs;
                       if (docs.isEmpty) {
@@ -1195,8 +1192,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         padding: const EdgeInsets.all(12),
                         itemCount: docs.length,
                         itemBuilder: (context, i) {
-                          final data =
-                              docs[i].data() as Map<String, dynamic>;
+                          final data = docs[i].data() as Map<String, dynamic>;
                           final status =
                               (data['status'] as String?) ?? 'pending';
                           final note = (data['note'] as String?) ?? '';
@@ -1219,19 +1215,15 @@ class _SettingsPageState extends State<SettingsPage> {
                                   : Colors.orange);
                           final String statusLabel = status == 'approved'
                               ? "Approved"
-                              : (status == 'rejected'
-                                  ? "Rejected"
-                                  : "Pending");
+                              : (status == 'rejected' ? "Rejected" : "Pending");
 
                           return Card(
                             margin: const EdgeInsets.only(bottom: 10),
                             child: ListTile(
-                              leading: Icon(Icons.payments,
-                                  color: statusColor),
+                              leading: Icon(Icons.payments, color: statusColor),
                               title: Text("Submitted: $date"),
                               subtitle: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   if (note.isNotEmpty) Text("Ref: $note"),
                                   if (status != 'pending' &&
@@ -1247,7 +1239,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: statusColor.withOpacity(0.12),
+                                  color: statusColor.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(color: statusColor),
                                 ),
@@ -1298,8 +1290,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 );
               }
               final info = snapshot.data!;
-              final statusLabel =
-                  info.status == 'trial' ? "Trial" : "Active";
+              final statusLabel = info.status == 'trial' ? "Trial" : "Active";
               final color = info.isExpired
                   ? Colors.red
                   : (info.isExpiringSoon ? Colors.orange : Colors.green);
@@ -1307,8 +1298,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ? "Expired on ${DateFormat('d MMM, yyyy').format(info.endDate)} — contact support to renew"
                   : "${info.daysLeft} day${info.daysLeft == 1 ? '' : 's'} remaining • valid until ${DateFormat('d MMM, yyyy').format(info.endDate)}";
               return ListTile(
-                leading: Icon(Icons.verified,
-                    color: color),
+                leading: Icon(Icons.verified, color: color),
                 title: Text("$statusLabel Plan"),
                 subtitle: Text(subtitle),
               );
@@ -1352,6 +1342,12 @@ class _SettingsPageState extends State<SettingsPage> {
               title: const Text("School Name"),
               onTap: () => _editSetting("School Name", "schoolName")),
           ListTile(
+              leading: const Icon(Icons.person),
+              title: const Text("Principal Name"),
+              subtitle: const Text(
+                  "This name will be used by the AI Chat when it talks about the principal"),
+              onTap: () => _editSetting("Principal Name", "principalName")),
+          ListTile(
               leading: const Icon(Icons.location_on),
               title: const Text("Address"),
               onTap: () => _editSetting("Address", "address")),
@@ -1360,8 +1356,7 @@ class _SettingsPageState extends State<SettingsPage> {
               title: const Text("WhatsApp Number"),
               subtitle: const Text(
                   "This number will be shown in this school's AI Chat, SLC, and Letterhead"),
-              onTap: () =>
-                  _editSetting("WhatsApp Number", "contactNumber")),
+              onTap: () => _editSetting("WhatsApp Number", "contactNumber")),
           ListTile(
               leading: const Icon(Icons.email),
               title: const Text("Contact Email"),
@@ -1393,8 +1388,8 @@ class _SettingsPageState extends State<SettingsPage> {
           ...List.generate(SchoolContext.paymentAccounts.length, (i) {
             final account = SchoolContext.paymentAccounts[i];
             return ListTile(
-              leading: const Icon(Icons.account_balance_wallet,
-                  color: Colors.teal),
+              leading:
+                  const Icon(Icons.account_balance_wallet, color: Colors.teal),
               title: Text(
                   "${account['method'] ?? ''} — ${account['number'] ?? ''}"),
               subtitle: (account['accountName'] ?? '').isNotEmpty

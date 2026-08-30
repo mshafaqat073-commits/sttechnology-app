@@ -3,12 +3,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'school_context.dart';
 import 'performance_bar_chart.dart';
 
-/// "My Performance" page — Teacher Dashboard se khulta hai. Do cheezein
-/// dikhata hai (dono hi already app me maujood collections se, koi naya
-/// field/collection nahi banaya):
-///   - Teacher ki apni attendance -> 'teacher_attendance' (teacherId, date, status)
-///   - Us ki assigned class(es) ka result -> 'results' (class, section, percentage, grade, term, date)
-/// Aur inhi do se combine karke overall remarks + graphs bana deta hai.
+/// "My Performance" page — opens from the Teacher Dashboard. It shows
+/// two things (both from collections that already exist in the app —
+/// no new field/collection was created):
+///   - The teacher's own attendance -> 'teacher_attendance' (teacherId, date, status)
+///   - The result of their assigned class(es) -> 'results' (class, section, percentage, grade, term, date)
+/// It then combines these two to produce overall remarks + graphs.
 class TeacherPerformancePage extends StatefulWidget {
   final String staffDocId;
   final Map<String, dynamic> staffData;
@@ -45,9 +45,9 @@ class _TeacherPerformancePageState extends State<TeacherPerformancePage> {
         .where('teacherId', isEqualTo: widget.staffDocId)
         .get();
 
-    // Har assigned class-section combination ke liye alag query — Firestore
-    // compound OR aasani se support nahi karta, isliye parallel queries
-    // chala kar client-side merge karte hain.
+    // A separate query per assigned class-section combination — Firestore
+    // doesn't easily support a compound OR, so parallel queries are run
+    // and merged client-side.
     List<QueryDocumentSnapshot<Map<String, dynamic>>> resultDocs = [];
     if (widget.assignedClasses.isNotEmpty) {
       List<Future<QuerySnapshot<Map<String, dynamic>>>> futures = [];
@@ -283,7 +283,7 @@ class _TeacherPerformancePageState extends State<TeacherPerformancePage> {
       );
     }
 
-    // Term ke hisab se average percentage (chart ke liye)
+    // Average percentage per term (for the chart)
     final Map<String, List<double>> byTerm = {};
     double sumPct = 0;
     final Map<String, int> gradeCount = {};

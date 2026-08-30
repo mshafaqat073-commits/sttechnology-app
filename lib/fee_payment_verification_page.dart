@@ -2,22 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'school_context.dart';
 
-/// Admin ye page se parents ki online submit ki hui fee payments
-/// (Easypaisa / UBL Bank) verify karta he. Approve karne par:
-///  - Parent ne jo 'fieldBreakdown' submit ki thi (jaise Books: 500,
-///    Monthly Fee: 4000) wo fee_structures ke un fields se minus hoti
-///    he (bilkul pay_fee_page.dart ki tarah), aur 'duesPaid' student ke
-///    'dues' field se minus hota he.
-///  - fee_history mein bilkul wahi schema wala record banta he jo
-///    admin ki manual PayFeePage banati he (paidBreakdown,
-///    remainingAfterPayment, duesPaid, totalAtPayment) — bas sath mein
-///    source:'online' aur paymentMethod bhi hote hain. Isi wajah se
-///    history_page.dart (aur parent_fee_history_page.dart) ka PDF,
-///    Fee Breakdown, aur long-press Delete & Restore in online
-///    payments ke liye bhi bilkul waisa hi kaam karta he jaisa manual
-///    payments ke liye karta he.
-/// Reject karne par sirf status 'rejected' ho jata he, dues par koi
-/// asar nahi parta.
+/// Admin uses this page to verify parents' online-submitted fee payments
+/// (Easypaisa / UBL Bank). On Approve:
+///  - The 'fieldBreakdown' the parent submitted (e.g. Books: 500,
+///    Monthly Fee: 4000) is subtracted from those fee_structures fields
+///    (exactly like pay_fee_page.dart), and 'duesPaid' is subtracted
+///    from the student's 'dues' field.
+///  - A record with exactly the same schema that admin's manual
+///    PayFeePage creates (paidBreakdown, remainingAfterPayment,
+///    duesPaid, totalAtPayment) is created in fee_history — just with
+///    source:'online' and paymentMethod added too. Because of this,
+///    history_page.dart's (and parent_fee_history_page.dart's) PDF,
+///    Fee Breakdown, and long-press Delete & Restore all work exactly
+///    the same for these online payments as they do for manual
+///    payments.
+/// On Reject, only the status becomes 'rejected' — dues are unaffected.
 class FeePaymentVerificationPage extends StatefulWidget {
   const FeePaymentVerificationPage({super.key});
 
@@ -30,10 +29,9 @@ class _FeePaymentVerificationPageState extends State<FeePaymentVerificationPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
-  // Ye keys fee_structures document mein hoti hain lekin actual fee
-  // amount nahi hain (meta / timestamps hain) — inhe kabhi bhi fee
-  // list ya total mein shamil nahi karna. (pay_fee_page.dart admin
-  // side ki tarah hi.)
+  // These keys exist in the fee_structures document but are not actual
+  // fee amounts (they're meta / timestamps) — never include them in the
+  // fee list or total. (Same as pay_fee_page.dart's admin side.)
   static const Set<String> _nonFeeKeys = {
     'studentId',
     'name',
@@ -46,10 +44,10 @@ class _FeePaymentVerificationPageState extends State<FeePaymentVerificationPage>
 
   static const List<String> _tabStatuses = ['pending', 'approved', 'rejected'];
 
-  // Teeno tabs ke streams ek dafa bana lete hain. Pehle _list() build()
-  // ke andar se call hoti thi, aur tab switch par (tooltip update ke
-  // liye) poora setState() chalta tha jo teeno streams ko dobara bana
-  // (aur Firestore se dobara connect kar) deta tha.
+  // Create the streams for all three tabs once. Previously _list() was
+  // called from inside build(), and a full setState() ran on every tab
+  // switch (for the tooltip update), which recreated (and reconnected
+  // to Firestore) all three streams every time.
   late final Map<String, Stream<QuerySnapshot>> _statusStreams = {
     for (final status in _tabStatuses)
       status: schoolCollection('fee_payments')
@@ -78,12 +76,12 @@ class _FeePaymentVerificationPageState extends State<FeePaymentVerificationPage>
     final double amount =
         double.tryParse(data['amount']?.toString() ?? '0') ?? 0;
 
-    // Parent ne har fee field ke against jitni amount submit ki thi
-    // (pay_fee_online_page.dart se 'fieldBreakdown' + 'duesPaid' aati
-    // he). Purane (is schema se pehle ke) pending records mein ye
-    // fields nahi hongi — un ke liye fallback: poori amount previous
-    // dues mein le lo (jaisa pehle hota tha), taake purane pending
-    // records approve karte waqt crash na ho.
+    // The amount the parent submitted against each fee field (comes
+    // as 'fieldBreakdown' + 'duesPaid' from pay_fee_online_page.dart).
+    // Older pending records (from before this schema) won't have these
+    // fields — fallback for those: put the whole amount toward previous
+    // dues (as it worked before), so approving old pending records
+    // doesn't crash.
     final bool hasBreakdown = data.containsKey('fieldBreakdown');
     final Map<String, dynamic> submittedBreakdown = hasBreakdown
         ? Map<String, dynamic>.from(data['fieldBreakdown'] ?? {})
@@ -96,9 +94,9 @@ class _FeePaymentVerificationPageState extends State<FeePaymentVerificationPage>
         schoolCollection('students').doc(studentId);
     final feeRef =
         schoolCollection('fee_structures').doc(studentId);
-    // Naya fee_history doc ke liye reference — history pages isi
-    // collection ko sunte hain, isliye approve hote hi entry yahan
-    // bhi banani zaroori he warna payment History mein nazar nahi aati.
+    // Reference for the new fee_history doc — history pages listen to
+    // this collection, so an entry must be created here as soon as it's
+    // approved, otherwise it won't show up in the payment History.
     final historyRef =
         schoolCollection('fee_history').doc();
 
@@ -120,19 +118,19 @@ class _FeePaymentVerificationPageState extends State<FeePaymentVerificationPage>
         List<String> fieldKeys =
             feeData.keys.where((f) => !_nonFeeKeys.contains(f)).toList();
 
-        // Grand total (fee fields + previous dues) — jaisa
-        // pay_fee_page.dart ka _grandTotal, taake "Remaining Dues (at
-        // that time)" history mein sahi calculate ho.
+        // Grand total (fee fields + previous dues) — same as
+        // pay_fee_page.dart's _grandTotal, so "Remaining Dues (at
+        // that time)" is calculated correctly in history.
         double totalFee = 0;
         for (var f in fieldKeys) {
           totalFee += double.tryParse(feeData[f]?.toString() ?? '0') ?? 0;
         }
         double grandTotal = totalFee + currentDues;
 
-        // Har field mein se jitna submit hua utna minus karke baqi
-        // field mein reh jane wali amount nikalna — bilkul
-        // pay_fee_page.dart _submitFee ki tarah. Submitted amount
-        // kabhi bhi field ki due se zyada apply nahi hoti (safety).
+        // Subtract whatever was submitted from each field to get the
+        // remaining amount left in that field — exactly like
+        // pay_fee_page.dart's _submitFee. The submitted amount is never
+        // applied beyond a field's due (safety).
         Map<String, double> fieldRemaining = {};
         Map<String, double> paidBreakdown = {};
         for (var f in fieldKeys) {
@@ -156,10 +154,10 @@ class _FeePaymentVerificationPageState extends State<FeePaymentVerificationPage>
           'reviewedAt': FieldValue.serverTimestamp(),
         });
 
-        // History pages (admin + parent) ke liye entry — bilkul
-        // pay_fee_page.dart _submitFee jesa schema, taake Fee
-        // Breakdown, PDF receipt, aur Delete & Restore sab isi tarah
-        // kaam karein jaise manual payments ke liye karte hain.
+        // Entry for the history pages (admin + parent) — exactly the
+        // same schema as pay_fee_page.dart's _submitFee, so Fee
+        // Breakdown, PDF receipt, and Delete & Restore all work the
+        // same way as they do for manual payments.
         txn.set(historyRef, {
           'studentId': studentId,
           'name': data['studentName'] ?? '',
@@ -192,12 +190,12 @@ class _FeePaymentVerificationPageState extends State<FeePaymentVerificationPage>
     }
   }
 
-  // Currently selected tab (Pending / Approved / Rejected) ki saari
-  // fee_payments entries delete kar deta he — pehle confirm dialog
-  // dikhata he kyunke ye records wapis nahi aa sakte (khaas kar
-  // approved payments ka proof hote hain). Ye sirf admin ko dikhta
-  // he (pehle parent-facing pay_fee_online_page.dart par tha, jo
-  // galti se lag gaya tha).
+  // Deletes all fee_payments entries in the currently selected tab
+  // (Pending / Approved / Rejected) — shows a confirm dialog first
+  // because these records can't be recovered (especially since they're
+  // proof of approved payments). This is only visible to admin (it was
+  // previously on the parent-facing pay_fee_online_page.dart by
+  // mistake).
   Future<void> _clearPaymentHistory() async {
     final status = _tabStatuses[_tabController.index];
 
@@ -275,7 +273,7 @@ class _FeePaymentVerificationPageState extends State<FeePaymentVerificationPage>
         }
         final docs = snapshot.data!.docs;
 
-        // Client-side sorting taake naye records pehle nazar aayein (bina index ke)
+        // Client-side sorting so newer records appear first (without needing an index)
         docs.sort((a, b) {
           final aTime = (a.data() as Map<String, dynamic>)['submittedAt'];
           final bTime = (b.data() as Map<String, dynamic>)['submittedAt'];

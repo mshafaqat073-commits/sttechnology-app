@@ -24,7 +24,7 @@ class _SetFeePageState extends State<SetFeePage> {
         'monthlyFee': double.tryParse(_monthlyFee.text) ?? 0,
         'transportFee': double.tryParse(_transportFee.text) ?? 0,
         'otherExpense': double.tryParse(_otherExpense.text) ?? 0,
-      }, SetOptions(merge: true)); // Yeh line zaroori hai
+      }, SetOptions(merge: true)); // This line is necessary
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -32,7 +32,7 @@ class _SetFeePageState extends State<SetFeePage> {
         Navigator.pop(context);
       }
     } catch (e) {
-      // Agar koi error aaye toh yahan pata chal jayega
+      // If any error occurs, it will show up here
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text("Error: $e")));

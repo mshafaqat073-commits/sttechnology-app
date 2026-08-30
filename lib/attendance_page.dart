@@ -45,9 +45,9 @@ class _AttendancePageState extends State<AttendancePage>
     _loadTeacherAttendanceForDate();
   }
 
-  // Firestore se active students ki saari classes nikal kar dropdown ke liye
-  // list banata hai — is se admission form se add kiya gaya har naya/custom
-  // class yahan bhi automatically show ho jata hai.
+  // Pulls all active students' classes from Firestore to build the
+  // dropdown list — this way any new/custom class added from the
+  // admission form automatically shows up here too.
   Future<void> _fetchClasses() async {
     try {
       var snapshot = await schoolCollection('students')
@@ -72,7 +72,7 @@ class _AttendancePageState extends State<AttendancePage>
     }
   }
 
-  // Selected class ke andar mojood sections nikalta hai (dropdown ke liye)
+  // Gets the sections that exist within the selected class (for the dropdown)
   Future<void> _fetchSectionsForClass(String className) async {
     try {
       var snapshot = await schoolCollection('students')
@@ -136,10 +136,10 @@ class _AttendancePageState extends State<AttendancePage>
         studentsQuery =
             studentsQuery.where('section', isEqualTo: selectedSection);
       }
-      // Students aur us din ki attendance dono ek sath (parallel) mangwate
-      // hain — pehle har student ke liye alag se doc().get() call hoti thi
-      // (N+1 pattern), jo 40 students wali class mein 40 sequential
-      // network round-trips banati thi. Ab sirf 2 queries total lagti hain.
+      // Fetch both the students and that day's attendance together (in
+      // parallel) — previously a separate doc().get() call was made for
+      // each student (N+1 pattern), which meant 40 sequential network
+      // round-trips for a class of 40 students. Now only 2 queries total are needed.
       final results = await Future.wait([
         studentsQuery.get(),
         schoolCollection('attendance')
@@ -149,8 +149,8 @@ class _AttendancePageState extends State<AttendancePage>
       var studentsSnapshot = results[0];
       var attendanceSnapshot = results[1];
 
-      // Us din ki saari attendance ek dafa map mein daal lete hain taake
-      // aage lookup O(1) ho, dobara query na karni pare
+      // Put that day's entire attendance into a map once, so later
+      // lookups are O(1) and there's no need to query again
       Map<String, String> attendanceByStudentId = {
         for (var doc in attendanceSnapshot.docs)
           (doc.data()['studentId'] as String? ?? doc.id): (doc.data()['status']
@@ -180,9 +180,9 @@ class _AttendancePageState extends State<AttendancePage>
     setState(() => _isLoadingTeachers = true);
 
     try {
-      // Yahan bhi wahi fix: staff list aur us din ki teacher_attendance
-      // dono parallel mein ek ek query se mangwate hain, har teacher ke
-      // liye alag se doc().get() nahi karte (N+1 se bacha jaye)
+      // Same fix here: fetch the staff list and that day's
+      // teacher_attendance both in parallel with one query each, instead
+      // of a separate doc().get() for each teacher (avoiding N+1)
       final results = await Future.wait([
         schoolCollection('staff').get(),
         schoolCollection('teacher_attendance')
@@ -237,12 +237,11 @@ class _AttendancePageState extends State<AttendancePage>
         String status = entry.value;
         String docId = "${formattedDate}_$studentId"; // unified: date+studentId only
 
-        // Yahan 'DocumentRef' ki jagah 'docRef' use karein
-        // IMPORTANT: schoolCollection() use karna zaroori hai, warna
-        // attendance is school ke data se bahar root-level 'attendance'
-        // collection mein chali jati he (parents/reports ko kabhi nazar
-        // nahi aati, kyunke wo hamesha schoolCollection('attendance') se
-        // padhte hain).
+        // Use 'docRef' instead of 'DocumentRef' here
+        // IMPORTANT: schoolCollection() must be used, otherwise attendance
+        // ends up in the root-level 'attendance' collection outside this
+        // school's data (parents/reports never see it, since they always
+        // read from schoolCollection('attendance')).
         var docRef = schoolCollection('attendance').doc(docId);
         batch.set(
             docRef,
@@ -286,8 +285,8 @@ class _AttendancePageState extends State<AttendancePage>
     }
   }
 
-  // Absent mark hue students ke fcmToken Firestore se nikal kar unhe
-  // notification bhejta hai.
+  // Fetches the fcmToken from Firestore for students marked Absent
+  // and sends them a notification.
   Future<void> _notifyAbsentStudents(List<String> studentIds) async {
     try {
       final targets = <Map<String, String?>>[];

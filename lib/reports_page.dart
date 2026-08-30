@@ -3,6 +3,7 @@ import 'pending_dues_report_page.dart';
 import 'fee_collection_report_page.dart';
 import 'student_attendance_report_page.dart';
 import 'student_attendance_monthly_report_page.dart';
+import 'student_attendance_daily_report_page.dart';
 import 'active_students_report_page.dart';
 import 'staff_attendance_report_page.dart';
 import 'staff_attendance_monthly_report_page.dart';
@@ -93,7 +94,7 @@ class ReportsPage extends StatelessWidget {
                 ),
                 _reportButton(
                   context,
-                  title: "Class Attendance (Monthly)",
+                  title: "Student Attendance Monthly",
                   icon: Icons.calendar_month,
                   color: Colors.blue.shade700,
                   onTap: () {
@@ -102,6 +103,20 @@ class ReportsPage extends StatelessWidget {
                       MaterialPageRoute(
                           builder: (context) =>
                               const StudentAttendanceMonthlyReportPage()),
+                    );
+                  },
+                ),
+                _reportButton(
+                  context,
+                  title: "Student Attendance Daily",
+                  icon: Icons.event_available,
+                  color: Colors.blue.shade700,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) =>
+                              const StudentAttendanceDailyReportPage()),
                     );
                   },
                 ),

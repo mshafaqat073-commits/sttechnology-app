@@ -5,18 +5,18 @@ import 'school_context.dart';
 import 'notification_helper.dart';
 import 'attendance_page.dart';
 
-/// Student apna ID card (QR code) camera ke samne kare, attendance khud-
-/// b-khud "Present" lag jati he — koi manual list mein tick karne ki
-/// zaroorat nahi.
+/// The student holds their ID card (QR code) in front of the camera and
+/// attendance is automatically marked "Present" — no need to manually
+/// tick a list.
 ///
-/// QR format (student_id_card_page.dart / parent_id_card_page.dart mein
-/// generate hota he): "AEPQR|{schoolId}|{studentId}\n..."
+/// QR format (generated in student_id_card_page.dart /
+/// parent_id_card_page.dart): "AEPQR|{schoolId}|{studentId}\n..."
 ///
-/// NOTE: mobile_scanner Android/iOS/macOS/Web par acha kaam karta he.
-/// Windows desktop par camera plugin support limited he — Windows par ye
-/// screen khulegi lekin scan kaam nahi karega, is liye neeche "Manual
-/// Entry" ka option bhi diya gaya he (Student ID search karke bhi
-/// attendance laga sakte hain).
+/// NOTE: mobile_scanner works well on Android/iOS/macOS/Web. Camera
+/// plugin support is limited on Windows desktop — this screen will open
+/// on Windows but scanning won't work, so a "Manual Entry" option is
+/// also provided below (attendance can also be marked by searching for
+/// a Student ID).
 class LiveAttendanceScannerPage extends StatefulWidget {
   const LiveAttendanceScannerPage({super.key});
 
@@ -43,7 +43,7 @@ class _LiveAttendanceScannerPageState
     final code = capture.barcodes.firstOrNull?.rawValue;
     if (code == null || !code.startsWith('AEPQR|')) return;
 
-    // Same QR baar baar scan hone se rokne ke liye 4 second cooldown.
+    // 4-second cooldown to stop the same QR from being scanned repeatedly.
     if (_lastResult == code &&
         _lastScanTime != null &&
         DateTime.now().difference(_lastScanTime!).inSeconds < 4) {
@@ -101,8 +101,8 @@ class _LiveAttendanceScannerPageState
       'markedVia': 'qr_scan',
     }, SetOptions(merge: true));
 
-    // Manual attendance ki tarah yahan bhi parent ko app-notification jati
-    // he, taake QR scan se lagi attendance ki bhi khabar mil jaye.
+    // Just like manual attendance, an app-notification is sent to the
+    // parent here too, so they also get notified for QR-scanned attendance.
     try {
       await NotificationHelper.sendToUser(
         toId: studentId,
@@ -129,12 +129,12 @@ class _LiveAttendanceScannerPageState
     );
   }
 
-  // "Manual Entry" ab wahi Attendance page kholta he jo admin apni normal
-  // (non-QR) attendance marking ke liye use karta he — same class dropdown,
-  // same Present/Absent/Leave buttons, same SAVE button. Isi liye ab dono
-  // jagah (QR scan aur manual) se lagayi gayi attendance bilkul ek jaisi
-  // tarah save hoti he (same collection, same doc-id format, aur Absent
-  // walon ko wahi parent-notification bhi jati he).
+  // "Manual Entry" now opens the same Attendance page that admin uses
+  // for normal (non-QR) attendance marking — same class dropdown, same
+  // Present/Absent/Leave buttons, same SAVE button. Because of this,
+  // attendance marked from both places (QR scan and manual) is saved in
+  // exactly the same way (same collection, same doc-id format, and the
+  // same parent-notification is sent for Absent students).
   Future<void> _manualEntry() async {
     await Navigator.push(
       context,

@@ -6,16 +6,16 @@ import 'school_branding.dart';
 import 'school_context.dart';
 import 'pdf_preview_helper.dart';
 
-/// Fee jama hone ke baad receipt print karne ke liye. Do printer options:
+/// For printing the receipt after a fee payment. Two printer options:
 ///
-///  1) Thermal Printer (58mm/80mm roll) — chhoti lambi slip, jaisi POS
-///     machines print karti hain.
-///  2) Bara/A4 Printer — normal size, aur ek page par kitni raseedain
-///     (copies — School Copy / Parent Copy / Bank Copy waghera) print
-///     karni hain wo bhi choose kar sakte hain (1 se 4 tak).
+///  1) Thermal Printer (58mm/80mm roll) — a small, long slip, like what
+///     POS machines print.
+///  2) Regular/A4 Printer — normal size, and you can also choose how
+///     many copies (School Copy / Parent Copy / Bank Copy, etc.) to
+///     print on one page (1 to 4).
 ///
-/// Printing.layoutPdf() OS ka print dialog khol deta he jahan se koi bhi
-/// connected printer (thermal ya normal) select ki ja sakti he.
+/// Printing.layoutPdf() opens the OS's print dialog, from where any
+/// connected printer (thermal or normal) can be selected.
 class FeeReceiptPage extends StatefulWidget {
   final String receiptNo;
   final String studentName;

@@ -5,13 +5,13 @@ import 'school_context.dart';
 class SLCHistoryPage extends StatelessWidget {
   const SLCHistoryPage({super.key});
 
-  // Record Restore karne ka function
+  // Function to restore a record
   Future<void> _restoreStudent(BuildContext context, DocumentSnapshot doc) async {
-  // 1. SLC record se student ka original ID dhundo (agar store kiya hai)
-  // Ya agar humne pura data SLC mein copy kiya hai:
+  // 1. Find the student's original ID from the SLC record (if it was stored)
+  // Or, since we've copied the full data into SLC:
   String studentName = doc['name'];
 
-  // 2. Wapas status 'active' kar dein
+  // 2. Set the status back to 'active'
   var studentRef = await schoolCollection('students')
       .where('name', isEqualTo: studentName)
       .get();

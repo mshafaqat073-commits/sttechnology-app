@@ -6,7 +6,7 @@ import 'school_context.dart';
 class ClassSelectionPage extends StatelessWidget {
   const ClassSelectionPage({super.key});
 
-  // Fixed academic order (Playgroup se Ten tak)
+  // Fixed academic order (Playgroup through Ten)
   static const List<String> _baseClassesOrder = [
     'Playgroup',
     'Nursery',
@@ -23,8 +23,8 @@ class ClassSelectionPage extends StatelessWidget {
     'Ten',
   ];
 
-  // Nayi/Custom class ko sabse upar (-1) rakhega,
-  // baaki ko fixed academic order mein rakhega.
+  // Keeps new/custom classes at the top (-1),
+  // rest follow the fixed academic order.
   int _compareClasses(String? classA, String? classB) {
     final String a = classA ?? '';
     final String b = classB ?? '';
@@ -47,7 +47,7 @@ class ClassSelectionPage extends StatelessWidget {
         backgroundColor: Colors.teal[800],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        // Firestore se live active students sunte hain.
+        // Listens to live active students from Firestore.
         stream: schoolCollection('students')
             .where('status', isEqualTo: 'active')
             .snapshots(),
@@ -64,7 +64,7 @@ class ClassSelectionPage extends StatelessWidget {
             );
           }
 
-          // Saare students ki classes se unique list banayein.
+          // Build a unique list from all students' classes.
           final Set<String> classSet = {};
 
           for (var doc in snapshot.data!.docs) {

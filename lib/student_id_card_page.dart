@@ -18,9 +18,9 @@ class _StudentIdCardPageState extends State<StudentIdCardPage> {
   String searchQuery = "";
   bool isLoading = false;
 
-  // Stream ek dafa bana lete hain — pehle ye seedha build() ke andar
-  // banta tha, is liye search box mein har letter type karne par (jo
-  // setState() call karta he) Firestore se dobara connect ho jata tha.
+  // Build the stream once — previously it was created directly inside
+  // build(), so every keystroke in the search box (which triggers
+  // setState()) reconnected to Firestore.
   late final Stream<QuerySnapshot> _studentsStream =
       schoolCollection('students').snapshots();
 
@@ -54,10 +54,10 @@ class _StudentIdCardPageState extends State<StudentIdCardPage> {
           studentData['contactNo'] ?? studentData['phone'] ?? 'N/A';
       String formNo = studentData['formNo']?.toString() ?? '-';
 
-      // Live Attendance scanner is prefix "AEPQR|schoolId|studentId" parse
-      // karta he taake QR scan karte hi student turant pehchana ja sake.
-      // Agar studentId maloom na ho (purana caller) to sirf purana
-      // human-readable text hi rehta he — koi cheez toot'ti nahi.
+      // The Live Attendance scanner parses the "AEPQR|schoolId|studentId"
+      // prefix so the student is identified instantly on QR scan.
+      // If studentId isn't known (an older caller), it just falls back
+      // to the old human-readable text — nothing breaks.
       String qrData = studentId != null
           ? "AEPQR|${SchoolContext.schoolId}|$studentId\nName: $studentName\nClass: $studentClass\nFather: $fatherName\nPhone: $contactNo"
           : "Name: $studentName\nClass: $studentClass\nFather: $fatherName\nPhone: $contactNo";

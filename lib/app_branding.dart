@@ -1,17 +1,18 @@
-/// Ye file sirf DEFAULT/fallback branding define karti hai:
-///  - App khulte hi (Role Selector, Login screen) — is waqt tak koi school
-///    login nahi hua hota, is liye kis school ka naam/logo dikhayein ye
-///    pata nahi chal sakta. Tab tak yehi generic naam/logo dikhta hai.
-///  - Kisi school ne abhi tak Settings > School Name / School Logo set
-///    nahi ki — tab bhi yehi fallback (poori app aur PDFs mein) use hota
-///    hai, taake kabhi khaali/tooti hui jagah na dikhe.
+/// This file only defines the DEFAULT/fallback branding:
+///  - Right when the app opens (Role Selector, Login screen) — no school
+///    has logged in yet at this point, so it isn't possible to know
+///    which school's name/logo to show. Until then, this same generic
+///    name/logo is shown.
+///  - If a school hasn't set Settings > School Name / School Logo yet —
+///    this same fallback is used then too (throughout the app and in
+///    PDFs), so an empty/broken spot is never shown.
 ///
-/// NAYE SCHOOL ko project dete waqt: har school apna asal naam/logo
-/// Settings > School Name / School Logo se khud set kar sakta hai (bina
-/// code chhue) — login ke baad poori app aur PDFs mein wahi dikhega.
-/// Ye file sirf pre-login screens aur "abhi tak kuch set nahi hua"
-/// fallback ke liye hai.
+/// When handing the project to a NEW SCHOOL: each school can set its own
+/// actual name/logo via Settings > School Name / School Logo (without
+/// touching any code) — after login, that same name/logo will show
+/// throughout the app and in PDFs. This file is only for pre-login
+/// screens and the "nothing set yet" fallback.
 library;
 
-const String kDefaultSchoolName = 'AEP School System';
+const String kDefaultSchoolName = 'School Management Software';
 const String kDefaultLogoAsset = 'assets/logo.png';

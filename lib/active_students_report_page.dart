@@ -40,15 +40,15 @@ class ActiveStudentsReportPage extends StatelessWidget {
     if (indexA != -1 && indexB != -1) {
       return indexA.compareTo(indexB);
     } else if (indexA != -1) {
-      return -1; // a pehle aayega
+      return -1; // a comes first
     } else if (indexB != -1) {
-      return 1; // b pehle aayega
+      return 1; // b comes first
     } else {
-      return cleanA.compareTo(cleanB); // Baqi classes alphabetical order mein
+      return cleanA.compareTo(cleanB); // Remaining classes in alphabetical order
     }
   }
 
-  // Ek class ke students ko unke Section ke hisaab se group karna
+  // Groups a class's students by their Section
   Map<String, List<Map<String, dynamic>>> _groupBySection(
       List<Map<String, dynamic>> students) {
     Map<String, List<Map<String, dynamic>>> grouped = {};
@@ -122,9 +122,9 @@ class ActiveStudentsReportPage extends StatelessWidget {
             groupedByClass[className]!.add(student);
           }
 
-          // Students ki alphabetical sorting yahan se khatam kar di hai taake original tarteeb rahe
+          // Alphabetical sorting of students has been removed here so the original order is kept
 
-          // Classes ko custom order (`_compareClasses`) ke mutabiq sort karna
+          // Sort classes according to the custom order (`_compareClasses`)
           var sortedClasses = groupedByClass.keys.toList()
             ..sort((a, b) => _compareClasses(a, b));
 
@@ -338,7 +338,7 @@ class ActiveStudentsReportPage extends StatelessWidget {
       groupedByClass[className]!.add(student);
     }
 
-    // Students alphabetical sorting PDF ke liye bhi hata di hai
+    // Alphabetical sorting of students has been removed for the PDF too
 
     // Custom Sorting Classes for PDF
     var sortedClasses = groupedByClass.keys.toList()

@@ -1,12 +1,12 @@
 // lib/secrets.example.dart
 //
-// Ye file SAFE he aur GitHub par ja sakti he — isme koi asal key nahi he,
-// sirf ek template he. Naye computer/team member ke liye:
-//   1. Is file ki copy banao aur naam badal kar "secrets.dart" rakho
-//      (usi lib/ folder mein).
-//   2. Neeche di gayi khaali values ki jagah asal keys daalo.
-// (lib/secrets.dart khud .gitignore mein he, isliye ye kabhi push nahi
-// hoti — sirf ye .example wali file version control mein rehti he.)
+// This file is SAFE and can go to GitHub — it has no real keys in it,
+// just a template. For a new computer/team member:
+//   1. Copy this file and rename it to "secrets.dart"
+//      (in the same lib/ folder).
+//   2. Replace the empty values below with the real keys.
+// (lib/secrets.dart itself is in .gitignore, so it never gets pushed —
+// only this .example file stays in version control.)
 
 const String groqApiKey = "YOUR_GROQ_API_KEY_HERE";
 

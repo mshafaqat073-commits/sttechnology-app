@@ -32,8 +32,7 @@ class SuperAdminSubscriptionPage extends StatefulWidget {
       _SuperAdminSubscriptionPageState();
 }
 
-class _SuperAdminSubscriptionPageState
-    extends State<SuperAdminSubscriptionPage>
+class _SuperAdminSubscriptionPageState extends State<SuperAdminSubscriptionPage>
     with SingleTickerProviderStateMixin {
   static const String _ownerPassword = "sm6585073";
 
@@ -326,13 +325,13 @@ class _SuperAdminSubscriptionPageState
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, color: Colors.black87)),
                 subtitle: Text("Submitted: $date",
-                    style: const TextStyle(
-                        fontSize: 12, color: Colors.black54)),
+                    style:
+                        const TextStyle(fontSize: 12, color: Colors.black54)),
                 trailing: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.12),
+                    color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: statusColor),
                   ),
@@ -430,10 +429,9 @@ class _SuperAdminSubscriptionPageState
                       fontWeight: FontWeight.bold, color: Colors.black87)),
             ),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.12),
+                color: statusColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: statusColor),
               ),
@@ -646,8 +644,7 @@ class _SuperAdminSubscriptionPageState
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text("$schoolName approved and extended by $result days."),
+          content: Text("$schoolName approved and extended by $result days."),
           backgroundColor: Colors.green,
         ),
       );

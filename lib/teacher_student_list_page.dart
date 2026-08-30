@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'school_context.dart';
 
 class TeacherStudentListPage extends StatefulWidget {
-  // Teacher ko multiple classes/sections assign ho sakte hain.
-  // Each entry: {'class': '6', 'section': 'A'} — section empty bhi ho sakti hai.
+  // A teacher can be assigned multiple classes/sections.
+  // Each entry: {'class': '6', 'section': 'A'} — section can be empty.
   final List<Map<String, String>> assignedClasses;
 
   const TeacherStudentListPage({
@@ -96,7 +96,7 @@ class _TeacherStudentListPageState extends State<TeacherStudentListPage> {
             return const Center(child: Text("No student found in this class."));
           }
 
-          // Naam ke hisab se sort
+          // Sort by name
           students.sort((a, b) {
             var dataA = a.data();
             var dataB = b.data();

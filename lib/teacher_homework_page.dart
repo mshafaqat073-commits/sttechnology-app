@@ -3,16 +3,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'notification_helper.dart';
 import 'school_context.dart';
 
-// Teacher wali Diary / Homework / Special Message page.
-// Admin wali HomeTaskPage se farq sirf itna hai ke Class/Section dropdown
-// Firestore se saari classes fetch nahi karta — sirf wahi classes/sections
-// dikhata hai jo is teacher ko staff record me (assignedClasses) assign
-// ki gai hain. Isliye teacher kabhi bhi kisi doosri class ko diary/homework/
-// message nahi bhej sakta.
+// The teacher-side Diary / Homework / Special Message page.
+// The only difference from the admin-side HomeTaskPage is that the
+// Class/Section dropdown doesn't fetch every class from Firestore —
+// it only shows the classes/sections this teacher is assigned in their
+// staff record (assignedClasses). So a teacher can never send a
+// diary/homework/message entry to a different class.
 class TeacherHomeworkPage extends StatefulWidget {
-  // Staff doc se aayi hui list, e.g. [{'class': '6', 'section': 'A'}, ...]
+  // The list from the staff doc, e.g. [{'class': '6', 'section': 'A'}, ...]
   final List<Map<String, String>> assignedClasses;
-  // Optional: record ke sath teacher ka naam save karne ke liye.
+  // Optional: used to save the teacher's name alongside the record.
   final String? teacherName;
 
   const TeacherHomeworkPage({
@@ -64,7 +64,7 @@ class _TeacherHomeworkPageState extends State<TeacherHomeworkPage>
     super.dispose();
   }
 
-  // Teacher ki assigned classes me se distinct class names.
+  // Distinct class names among the teacher's assigned classes.
   List<String> get _assignedClassNames {
     final names = widget.assignedClasses
         .map((e) => e['class'] ?? '')
@@ -75,8 +75,8 @@ class _TeacherHomeworkPageState extends State<TeacherHomeworkPage>
     return names;
   }
 
-  // Di gai class ke liye — sirf woh sections jo is teacher ko us class me
-  // assign hain (kisi aur teacher ki sections nahi dikhengi).
+  // For the given class — only the sections this teacher is assigned
+  // in that class (another teacher's sections won't show up).
   List<String> _sectionsForAssignedClass(String? className) {
     if (className == null || className.isEmpty) return [];
     final sections = widget.assignedClasses
@@ -89,9 +89,9 @@ class _TeacherHomeworkPageState extends State<TeacherHomeworkPage>
     return sections;
   }
 
-  // Di gai class (aur agar diya ho to section) ke saare students ko
-  // push + in-app notification bhejta hai. Section khali ho to poori
-  // class ke students shamil hote hain.
+  // Sends a push + in-app notification to all students of the given
+  // class (and section, if given). If section is empty, students from
+  // the whole class are included.
   Future<void> _notifyClassStudents({
     required String className,
     required String section,
@@ -121,9 +121,9 @@ class _TeacherHomeworkPageState extends State<TeacherHomeworkPage>
         type: type,
       );
     } catch (e) {
-      // Notification fail ho jaye to bhi diary/homework/message save to
-      // ho hi chuka hota he — is liye chup chaap ignore karte hain taake
-      // user ko save success ke baad koi confusing error na dikhe.
+      // Even if the notification fails, the diary/homework/message has
+      // already been saved — so this is silently ignored to avoid
+      // showing the user a confusing error right after a save success.
       debugPrint('Notify students failed: $e');
     }
   }
@@ -278,9 +278,9 @@ class _TeacherHomeworkPageState extends State<TeacherHomeworkPage>
     }
   }
 
-  // "My Posts" dialog: teacher sirf apni assigned classes ke posts
-  // dekh/edit/delete kar sakta hai — Firestore whereIn se class list
-  // par restrict kiya gaya hai.
+  // "My Posts" dialog: a teacher can only view/edit/delete posts from
+  // their own assigned classes — restricted to the class list via
+  // Firestore whereIn.
   void _openManagementDialog() {
     final classNames = _assignedClassNames;
     showDialog(
@@ -337,13 +337,13 @@ class _TeacherHomeworkPageState extends State<TeacherHomeworkPage>
     // Firestore whereIn supports up to 30 values (10 on older SDKs) —
     // fine here since it's just this teacher's own assigned classes.
     //
-    // NOTE: orderBy('date') jaan-boojh kar query me nahi lagaya — 'class'
-    // par whereIn + 'date' par orderBy ek sath lagane ke liye Firestore ko
-    // ek composite index chahiye hota hai. Agar wo index exist nahi karta
-    // to query fail ho jati hai, aur chunke hum sirf hasData check kar rahe
-    // thay (hasError nahi), UI hamesha loading spinner par atka reh jata
-    // tha. Ab sorting neeche Dart me client-side ki ja rahi hai, is se
-    // koi index banane ki zaroorat nahi.
+    // NOTE: orderBy('date') is deliberately not added to the query —
+    // combining a whereIn on 'class' with an orderBy on 'date' would
+    // require Firestore to have a composite index. If that index didn't
+    // exist, the query would fail, and since we were only checking
+    // hasData (not hasError), the UI would get stuck on the loading
+    // spinner forever. Sorting is now done client-side in Dart below,
+    // so no index needs to be created.
     return StreamBuilder<QuerySnapshot>(
       stream: schoolCollection(collectionName)
           .where('class', whereIn: classNames)
@@ -364,8 +364,8 @@ class _TeacherHomeworkPageState extends State<TeacherHomeworkPage>
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        // Extra safety: sirf woh docs rakho jinka class+section combo
-        // is teacher ko actually assign hai.
+        // Extra safety: keep only the docs whose class+section combo is
+        // actually assigned to this teacher.
         var docs = snapshot.data!.docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
           final cls = (data['class'] ?? '').toString();
@@ -374,7 +374,7 @@ class _TeacherHomeworkPageState extends State<TeacherHomeworkPage>
           return assignedSections.isEmpty || assignedSections.contains(sec);
         }).toList();
 
-        // Sabse nayi entry sabse upar — date field Timestamp hai.
+        // Newest entry first — the date field is a Timestamp.
         docs.sort((a, b) {
           final da = (a.data() as Map<String, dynamic>)['date'];
           final db = (b.data() as Map<String, dynamic>)['date'];
@@ -758,7 +758,7 @@ class _TeacherHomeworkPageState extends State<TeacherHomeworkPage>
                   ),
                 ),
 
-                // Neeche apni post ki hui entries edit/delete karne ka button
+                // Button below to edit/delete entries this teacher has posted
                 Container(
                   padding: const EdgeInsets.all(12),
                   width: double.infinity,

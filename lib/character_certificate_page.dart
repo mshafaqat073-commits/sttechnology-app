@@ -13,24 +13,24 @@ import 'pdf_preview_helper.dart';
 // ============================================================================
 // CharacterCertificatePage
 // ----------------------------------------------------------------------------
-// Student ka naam type karte hi (as-you-type) neeche matching students ki
-// list aati he — tap karte hi us student ki SAARI details (name, father
-// name, class, section, DOB, photo waghera) 'students' collection se khud
-// aa jati hain. Bas 2-3 certificate-specific fields (Ref No, Session,
-// Remarks, Issue Date) bhar ke "Generate Certificate" dabao — PDF school ke
-// logo (Settings > School Logo se, warna default) aur Settings mein set
-// kiye gaye School Name /
-// Address ke sath ban ke share hoga.
+// As soon as you type a student's name (as-you-type), a list of matching
+// students appears below — tap one and ALL of that student's details
+// (name, father name, class, section, DOB, photo, etc.) are automatically
+// filled in from the 'students' collection. Just fill in the 2-3
+// certificate-specific fields (Ref No, Session, Remarks, Issue Date) and
+// press "Generate Certificate" — the PDF will be generated and shared
+// with the school's logo (from Settings > School Logo, otherwise
+// default) and the School Name / Address set in Settings.
 //
-// NOTE: is file mein student ki photo PDF mein lagane ke liye network se
-// (imageUrl) download ki jati he, is ke liye `http` package chahiye. Agar
-// pubspec.yaml mein pehle se nahi he to yeh line dependencies: ke neeche
-// add kar dein:
+// NOTE: this file downloads the student's photo from the network
+// (imageUrl) to place it in the PDF, which requires the `http` package.
+// If it isn't already in pubspec.yaml, add this line under dependencies:
 //
 //   http: ^1.2.0
 //
-// Agar http package add na ki gayi to bhi certificate ban jayega — sirf
-// student ki photo box khali (blank) rahega, baqi sab kaam karega.
+// If the http package isn't added, the certificate will still be
+// generated — only the student's photo box will stay empty (blank),
+// everything else will work.
 // ============================================================================
 
 class CharacterCertificatePage extends StatefulWidget {
@@ -51,9 +51,9 @@ class _CharacterCertificatePageState extends State<CharacterCertificatePage> {
 
   Map<String, dynamic>? _selectedStudent;
 
-  // Yeh fields student record mein nahi hote (certificate banate waqt
-  // istemal hote hain) — is liye student select hone ke baad bhi user
-  // in ko khud bhar/edit kar sakta he.
+  // These fields don't exist in the student record (they're used
+  // while generating the certificate) — so the user can fill/edit
+  // these themselves even after selecting a student.
   final TextEditingController _refNoController = TextEditingController();
   final TextEditingController _regdNoController = TextEditingController();
   final TextEditingController _sessionController = TextEditingController();
@@ -85,9 +85,9 @@ class _CharacterCertificatePageState extends State<CharacterCertificatePage> {
   String _formatDate(DateTime d) =>
       "${d.day.toString().padLeft(2, '0')}-${d.month.toString().padLeft(2, '0')}-${d.year}";
 
-  // Poori students list ek dafa load kar lete hain taake search har
-  // keystroke par bina dobara Firestore hit kiye, turant (instant) ho —
-  // aur sirf prefix nahi balke naam mein kahin bhi likha lafz match ho jaye.
+  // Load the whole student list once, so search is instant on every
+  // keystroke without hitting Firestore again — and matches any word
+  // anywhere in the name, not just as a prefix.
   Future<void> _loadAllStudents() async {
     setState(() => _loadingStudents = true);
     try {
@@ -185,7 +185,7 @@ class _CharacterCertificatePageState extends State<CharacterCertificatePage> {
     }
     setState(() => _generating = true);
     try {
-      // 1) School ka logo (Settings > School Logo se, warna default)
+      // 1) School's logo (from Settings > School Logo, otherwise default)
       Uint8List? logoBytes;
       try {
         logoBytes = await getSchoolLogoBytes();
@@ -195,7 +195,7 @@ class _CharacterCertificatePageState extends State<CharacterCertificatePage> {
       final pw.MemoryImage? logoImage =
           logoBytes != null ? pw.MemoryImage(logoBytes) : null;
 
-      // 2) School Name / Address (Settings page ke settings/global doc se)
+      // 2) School Name / Address (from the Settings page's settings/global doc)
       String schoolName = currentSchoolDisplayName();
       String schoolAddress = "";
       try {
@@ -207,7 +207,7 @@ class _CharacterCertificatePageState extends State<CharacterCertificatePage> {
         }
       } catch (_) {}
 
-      // 3) Student ki photo (agar imageUrl available he to download kar lein)
+      // 3) Student's photo (download it if imageUrl is available)
       pw.MemoryImage? studentPhoto;
       final String imageUrl = _selectedStudent?['imageUrl']?.toString() ?? "";
       if (imageUrl.isNotEmpty) {
@@ -404,7 +404,7 @@ class _CharacterCertificatePageState extends State<CharacterCertificatePage> {
     }
   }
 
-  // Preview aur Send dono ka option ek hi jaga par
+  // Both Preview and Send options in one place
   Future<void> _showPdfActionSheet(
       Uint8List pdfBytes, String fileName, String shareText) async {
     await showModalBottomSheet(

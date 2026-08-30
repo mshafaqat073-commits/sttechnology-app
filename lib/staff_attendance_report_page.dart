@@ -245,20 +245,20 @@ class _TeacherAttendanceReportPageState
     for (var doc in docs) {
       var data = doc.data() as Map<String, dynamic>;
 
-      // Pehle attendance document ke andar hi check karein agar naam save hai
+      // First check if the name is already saved inside the attendance document
       String name =
           data['teacherName'] ?? data['name'] ?? data['staffName'] ?? '';
       String role = data['role'] ?? data['designation'] ?? 'Teacher';
       String status = data['status'] ?? 'Present';
 
-      // Mukhtalif possible ID field names check karein
+      // Check different possible ID field names
       String teacherId =
           data['teacherId'] ?? data['staffId'] ?? data['id'] ?? '';
 
-      // Agar attendance mein naam nahi hai, toh staff/teachers collection mein search karein
+      // If the name isn't in attendance, search the staff/teachers collection
       if ((name.isEmpty || name == 'N/A') && teacherId.isNotEmpty) {
         try {
-          // Pehle 'teachers' collection check karein
+          // First check the 'teachers' collection
           var teacherDoc = await schoolCollection('staff')
               .doc(teacherId)
               .get();
@@ -272,7 +272,7 @@ class _TeacherAttendanceReportPageState
                 'N/A';
             role = teacherData['role'] ?? teacherData['designation'] ?? role;
           } else {
-            // Agar 'teachers' mein nahi mila, toh 'staff' collection check karein
+            // If not found in 'teachers', check the 'staff' collection
             var staffDoc = await schoolCollection('staff')
                 .doc(teacherId)
                 .get();

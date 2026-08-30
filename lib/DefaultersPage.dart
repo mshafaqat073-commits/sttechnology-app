@@ -44,9 +44,9 @@ class _DefaultersPageState extends State<DefaultersPage> {
     return words.every((word) => haystack.contains(word));
   }
 
-  // Ye default fields hain — inhi ki tarteeb pehle dikhai jayegi.
-  // Koi bhi naya custom field (set_fee_page se add kiya gaya) automatically
-  // inke baad list ho jayega.
+  // These are the default fields — they are shown in this order first.
+  // Any new custom field (added from set_fee_page) is automatically
+  // listed after these.
   static const List<String> _defaultFieldOrder = [
     'monthlyFee',
     'admissionFee',
@@ -60,8 +60,8 @@ class _DefaultersPageState extends State<DefaultersPage> {
     'other',
   ];
 
-  // Ye keys fee_structures document mein hoti hain lekin actual fee amount
-  // nahi hain — inhe fee list/total mein kabhi shamil nahi karna.
+  // These keys exist in the fee_structures document but are not actual
+  // fee amounts — never include them in the fee list/total.
   static const Set<String> _nonFeeKeys = {
     'studentId',
     'name',
@@ -83,7 +83,7 @@ class _DefaultersPageState extends State<DefaultersPage> {
     return [...known, ...extra];
   }
 
-  // camelCase field name ko readable label me convert karta hai
+  // Converts a camelCase field name into a readable label
   String _formatFieldLabel(String key) {
     if (key.isEmpty) return key;
     String spaced =
@@ -122,7 +122,7 @@ class _DefaultersPageState extends State<DefaultersPage> {
                 );
               }
 
-              // Fee structures ko Map mein convert karna taake ID se foran data mil jaye
+              // Convert fee structures into a Map so data is instantly available by ID
               Map<String, Map<String, dynamic>> feeMap = {};
               for (var feeDoc in feeSnapshot.data!.docs) {
                 feeMap[feeDoc.id] = feeDoc.data() as Map<String, dynamic>;
@@ -134,8 +134,8 @@ class _DefaultersPageState extends State<DefaultersPage> {
                 var studentData = studentDoc.data() as Map<String, dynamic>;
                 var feeData = feeMap[studentDoc.id] ?? {};
 
-                // Fee document me jo bhi fields hon (default ya custom),
-                // sabka sum le lein — hardcoded list ki zarurat nahi
+                // Sum up whatever fields exist in the fee document (default
+                // or custom) — no need for a hardcoded list
                 double totalFeeStruct = 0;
                 for (var entry in feeData.entries) {
                   if (_nonFeeKeys.contains(entry.key)) continue;
@@ -150,7 +150,7 @@ class _DefaultersPageState extends State<DefaultersPage> {
 
                 double grandTotal = totalFeeStruct + previousDues;
 
-                // Sirf unhein shamil karein jin ke total dues 0 se zyada hon
+                // Only include those whose total dues are greater than 0
                 if (grandTotal > 0) {
                   defaultersList.add({
                     'studentDoc': studentDoc,
@@ -306,7 +306,7 @@ class _DefaultersPageState extends State<DefaultersPage> {
       );
   }
 
-  // Defaulter details popup/dialog jo har field ki tafseel dikhaye ga
+  // Defaulter details popup/dialog that shows the breakdown of every field
   void _showDefaulterDetailDialog(
       BuildContext context, Map<String, dynamic> defaulter) {
     var studentData = defaulter['studentData'];
@@ -397,8 +397,8 @@ class _DefaultersPageState extends State<DefaultersPage> {
   // WHATSAPP / SMS MESSAGING HELPERS
   // ============================================================
 
-  /// Student ke document mein se phone number dhoondta hai
-  /// (jo bhi field name use ho raha ho).
+  /// Finds the phone number from the student's document
+  /// (whichever field name is being used).
   String? _extractPhone(Map<String, dynamic> studentData) {
     const possibleKeys = [
       'contactNo',
@@ -420,8 +420,8 @@ class _DefaultersPageState extends State<DefaultersPage> {
     return null;
   }
 
-  /// Local number (0300...) ko WhatsApp ke international format
-  /// (923...) mein convert karta hai.
+  /// Converts a local number (0300...) into WhatsApp's international
+  /// format (923...).
   String _toWhatsAppFormat(String raw) {
     String digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.startsWith('0')) {
@@ -440,7 +440,7 @@ class _DefaultersPageState extends State<DefaultersPage> {
     double previousDues =
         double.tryParse(studentData['dues']?.toString() ?? '0') ?? 0;
 
-    // Sirf wo fields jin ki value 0 se zyada ho (yani pending hon)
+    // Only fields whose value is greater than 0 (i.e. still pending)
     List<String> fields = _orderedFeeFields(feeData);
     StringBuffer details = StringBuffer();
     for (var field in fields) {
@@ -460,8 +460,8 @@ class _DefaultersPageState extends State<DefaultersPage> {
         "pay as soon as possible. Thank you - ${currentSchoolDisplayName()}";
   }
 
-  /// Ek defaulter ke liye WhatsApp chat kholta hai (message pehle se likha hua)
-  /// aur sath hi push + in-app notification bhi bhejta hai.
+  /// Opens a WhatsApp chat for one defaulter (message pre-written)
+  /// and also sends a push + in-app notification.
   Future<void> _openWhatsApp(
       BuildContext context,
       String studentId,
@@ -483,8 +483,8 @@ class _DefaultersPageState extends State<DefaultersPage> {
     final uri = Uri.parse(
         "https://wa.me/$waNumber?text=${Uri.encodeComponent(message)}");
 
-    // Fee reminder push + in-app notification (agar is student ka fcmToken
-    // maloom he to push bhi jayegi, warna sirf in-app history banegi).
+    // Fee reminder push + in-app notification (if this student's fcmToken
+    // is known, a push notification is also sent; otherwise only in-app history is created).
     NotificationHelper.sendToUser(
       toId: studentId,
       toRole: 'student',
@@ -508,7 +508,7 @@ class _DefaultersPageState extends State<DefaultersPage> {
     }
   }
 
-  /// "Message All" button dabane pr options dikhata hai.
+  /// Shows options when the "Message All" button is pressed.
   void _showBulkMessageOptions(
       BuildContext context, List<Map<String, dynamic>> defaultersList) {
     showModalBottomSheet(
@@ -541,7 +541,7 @@ class _DefaultersPageState extends State<DefaultersPage> {
     );
   }
 
-  /// Sab defaulters ke numbers pr ek sath SMS compose screen kholta hai.
+  /// Opens the SMS compose screen for all defaulters' numbers at once.
   Future<void> _sendBulkSms(
       BuildContext context, List<Map<String, dynamic>> defaultersList) async {
     List<String> numbers = [];
@@ -581,7 +581,7 @@ class _DefaultersPageState extends State<DefaultersPage> {
     }
   }
 
-  /// Har defaulter ke liye ek-ek karke WhatsApp chat kholne wala flow.
+  /// Flow that opens a WhatsApp chat one-by-one for each defaulter.
   void _startWhatsAppQueue(
       BuildContext context, List<Map<String, dynamic>> defaultersList) {
     int index = 0;

@@ -9,8 +9,8 @@ import 'pdf_preview_helper.dart';
 class PendingDuesReportPage extends StatelessWidget {
   const PendingDuesReportPage({super.key});
 
-  // Ye keys fee_structures document mein hoti hain lekin actual fee amount
-  // nahi hain — inhe kabhi bhi fee list/total mein shamil nahi karna.
+  // These keys exist in the fee_structures document but are not actual
+  // fee amounts — never include them in the fee list/total.
   static const Set<String> _nonFeeKeys = {
     'studentId',
     'name',
@@ -21,9 +21,9 @@ class PendingDuesReportPage extends StatelessWidget {
     'docId',
   };
 
-  // Ye default fields hain — inhi ki tarteeb pehle dikhai jayegi.
-  // Koi bhi naya custom field (set_fee_page se add kiya gaya) automatically
-  // inke baad list ho jayega.
+  // These are the default fields — they are shown in this order first.
+  // Any new custom field (added from set_fee_page) is automatically
+  // listed after these.
   static const List<String> _defaultFieldOrder = [
     'monthlyFee',
     'admissionFee',
@@ -48,7 +48,7 @@ class PendingDuesReportPage extends StatelessWidget {
     return [...known, ...extra];
   }
 
-  // camelCase field name ko readable label me convert karta hai
+  // Converts a camelCase field name into a readable label
   String _formatFieldLabel(String key) {
     if (key.isEmpty) return key;
     String spaced =
@@ -116,7 +116,7 @@ class PendingDuesReportPage extends StatelessWidget {
                 var studentData = studentDoc.data() as Map<String, dynamic>;
                 var feeData = feeMap[studentDoc.id] ?? {};
 
-                // Current fee fields sum (default + koi bhi custom field)
+                // Current fee fields sum (default + any custom field)
                 double totalFeeStruct = _sumFeeData(feeData);
 
                 // Previous dues from student document

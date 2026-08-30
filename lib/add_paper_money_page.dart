@@ -52,18 +52,18 @@ class _AddPaperMoneyPageState extends State<AddPaperMoneyPage> {
         return;
       }
 
-      // 3. Batch Set with Merge (Error khatam karne ke liye)
+      // 3. Batch Set with Merge (to eliminate the error)
       var batch = FirebaseFirestore.instance.batch();
 
-      // Har student ko kitna amount add hua — "Undo" ke liye chahiye.
+      // How much amount was added for each student — needed for "Undo".
       Map<String, double> studentAmounts = {};
 
       for (var doc in students.docs) {
         var feeRef = schoolCollection('fee_structures')
             .doc(doc.id);
 
-        // batch.update ki jagah batch.set(..., SetOptions(merge: true)) use kiya hai
-        // Taa ke agar document na ho toh naya ban jaye aur error na aaye
+        // Using batch.set(..., SetOptions(merge: true)) instead of batch.update
+        // so that a new document is created if one doesn't exist, avoiding an error
         batch.set(
           feeRef,
           {'paperMoney': FieldValue.increment(amount)},
@@ -73,7 +73,7 @@ class _AddPaperMoneyPageState extends State<AddPaperMoneyPage> {
         studentAmounts[doc.id] = amount;
       }
 
-      // Is operation ka log save karein taake baad mein "Undo" kiya ja sake
+      // Save a log of this operation so it can be undone later
       var logRef =
           schoolCollection('bulk_fee_operations').doc();
       batch.set(logRef, {
@@ -105,9 +105,9 @@ class _AddPaperMoneyPageState extends State<AddPaperMoneyPage> {
     }
   }
 
-  // Ek pehle se kiye gaye "Add Paper Money" operation ko reverse karta hai —
-  // har student se utni hi amount wapis minus kar deta hai jitni us waqt
-  // add hui thi, aur log ko "reverted" mark kar deta hai.
+  // Reverses a previously performed "Add Paper Money" operation —
+  // subtracts back the same amount from each student that was added at
+  // that time, and marks the log as "reverted".
   Future<void> _undoOperation(
       BuildContext context, DocumentSnapshot logDoc) async {
     var data = logDoc.data() as Map<String, dynamic>;
@@ -216,7 +216,7 @@ class _AddPaperMoneyPageState extends State<AddPaperMoneyPage> {
                   .limit(5)
                   .snapshots(),
               builder: (context, snapshot) {
-                // Firestore se koi error aaya (jaise missing composite index)
+                // An error came from Firestore (e.g. missing composite index)
                 if (snapshot.hasError) {
                   return Padding(
                     padding: const EdgeInsets.all(16),

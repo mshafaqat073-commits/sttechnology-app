@@ -18,8 +18,8 @@ class _TeacherIdCardPageState extends State<TeacherIdCardPage> {
   String searchQuery = "";
   bool isLoading = false;
 
-  // Search box mein type karte waqt (setState) stream dobara na bane,
-  // is liye ek dafa bana kar rakh lete hain.
+  // Build the stream once and keep it, so it doesn't get recreated
+  // (via setState) every time something is typed in the search box.
   late final Stream<QuerySnapshot> _staffStream =
       schoolCollection('staff').snapshots();
 

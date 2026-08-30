@@ -33,10 +33,10 @@ class _HomeTaskPageState extends State<HomeTaskPage>
   final TextEditingController _msgTextController = TextEditingController();
   bool _isSavingMsg = false;
 
-  // Class aur Section list Firestore se (students collection) fetch hoti hai
-  // — jo classes/sections admission ke waqt already bana di gayi hain
+  // Class and Section lists are fetched from Firestore (students
+  // collection) — the classes/sections already created at admission time
   List<String> classesList = [];
-  // Har class ke apne hi sections — key: class name, value: us class ke sections
+  // Each class has its own sections — key: class name, value: that class's sections
   Map<String, List<String>> _classSectionMap = {};
   bool _isLoadingLists = true;
 
@@ -47,7 +47,7 @@ class _HomeTaskPageState extends State<HomeTaskPage>
     _fetchExistingClassesAndSections();
   }
 
-  // Students collection se distinct Class aur har Class ke sections nikalna
+  // Get distinct Classes and each Class's sections from the students collection
   Future<void> _fetchExistingClassesAndSections() async {
     try {
       var snapshot =
@@ -82,7 +82,7 @@ class _HomeTaskPageState extends State<HomeTaskPage>
     }
   }
 
-  // Diya gaya class ke liye uske existing sections wapis dena
+  // Return the existing sections for a given class
   List<String> _sectionsForClass(String? className) {
     if (className == null || className.isEmpty) return [];
     return _classSectionMap[className] ?? [];
@@ -104,7 +104,7 @@ class _HomeTaskPageState extends State<HomeTaskPage>
     super.dispose();
   }
 
-  // Diary Save karne ka function
+  // Function to save the Diary
   Future<void> _notifyClassStudents({
     required String className,
     required String section,
@@ -186,7 +186,7 @@ class _HomeTaskPageState extends State<HomeTaskPage>
     }
   }
 
-  // Homework Save karne ka function
+  // Function to save Homework
   Future<void> _saveHomework() async {
     if (_hwClassController.text.isEmpty ||
         _hwSubjectController.text.isEmpty ||
@@ -238,7 +238,7 @@ class _HomeTaskPageState extends State<HomeTaskPage>
     }
   }
 
-  // Special Message Save karne ka function
+  // Function to save a Special Message
   Future<void> _saveSpecialMessage() async {
     if (_msgClassController.text.isEmpty || _msgTextController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -286,7 +286,7 @@ class _HomeTaskPageState extends State<HomeTaskPage>
     }
   }
 
-  // Edit / Update Dialog open karne ke liye function
+  // Function to open the Edit / Update Dialog
   void _openManagementDialog() {
     showDialog(
       context: context,
@@ -332,7 +332,7 @@ class _HomeTaskPageState extends State<HomeTaskPage>
     );
   }
 
-  // Firestore se data fetch kar ke Edit/Update karne ki list view
+  // List view for editing/updating, fetched from Firestore
   Widget _buildRecordList(String collectionName, String fieldKey) {
     return StreamBuilder<QuerySnapshot>(
       stream: schoolCollection(collectionName)
@@ -386,7 +386,7 @@ class _HomeTaskPageState extends State<HomeTaskPage>
     );
   }
 
-  // Record Update karne ka Dialog
+  // Dialog to update a record
   void _editRecord(String docId, String collectionName, String fieldKey,
       Map<String, dynamic> existingData) {
     TextEditingController editController =
@@ -455,7 +455,7 @@ class _HomeTaskPageState extends State<HomeTaskPage>
     );
   }
 
-  // Record Delete karne ka function
+  // Function to delete a record
   Future<void> _deleteRecord(String docId, String collectionName) async {
     await schoolCollection(collectionName)
         .doc(docId)

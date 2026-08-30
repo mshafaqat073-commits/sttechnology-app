@@ -18,18 +18,18 @@ class _PayFeePageState extends State<PayFeePage> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _discountController = TextEditingController();
 
-  // Har fee field (Books, Uniform, Monthly Fee, waghera) ke liye alag
-  // "Paid" input — key = field name, value = us field ke against jitni
-  // amount abhi pay ki ja rahi hai.
+  // A separate "Paid" input for each fee field (Books, Uniform,
+  // Monthly Fee, etc.) — key = field name, value = how much amount is
+  // being paid against that field right now.
   final Map<String, TextEditingController> _paidControllers = {};
 
-  // "Previous Dues" (student['dues']) ke against jitni amount pay ki ja
-  // rahi hai, uska apna alag input.
+  // Its own separate input for how much amount is being paid against
+  // "Previous Dues" (student['dues']).
   final TextEditingController _duesPaidController = TextEditingController();
 
-  // Ye keys fee_structures document mein hoti hain lekin actual fee amount
-  // nahi hain (student info / timestamps hain) — inhe kabhi bhi fee list
-  // ya total mein shamil nahi karna.
+  // These keys exist in the fee_structures document but are not actual
+  // fee amounts (they're student info / timestamps) — never include
+  // them in the fee list or total.
   static const Set<String> _nonFeeKeys = {
     'studentId',
     'name',
@@ -40,9 +40,9 @@ class _PayFeePageState extends State<PayFeePage> {
     'docId',
   };
 
-  // Ye default fields hain — inhi ki tarteeb pehle dikhai jayegi.
-  // Koi bhi naya custom field (set_fee_page se "+ Add New Field" se add kiya gaya)
-  // automatically inke baad list ho jayega.
+  // These are the default fields — they are shown in this order first.
+  // Any new custom field (added via "+ Add New Field" from
+  // set_fee_page) is automatically listed after these.
   static const List<String> _defaultFieldOrder = [
     'monthlyFee',
     'admissionFee',
@@ -56,9 +56,9 @@ class _PayFeePageState extends State<PayFeePage> {
     'other',
   ];
 
-  // fee_structures document me jo bhi keys maujood hon unhe order karta hai:
-  // pehle jaani-pehchani (default) fields, phir koi bhi naya/custom field.
-  // Meta fields (name, class, waghera) hamesha exclude rehti hain.
+  // Orders whatever keys exist in the fee_structures document:
+  // familiar (default) fields first, then any new/custom fields.
+  // Meta fields (name, class, etc.) are always excluded.
   List<String> _orderedFeeFields(Map<String, dynamic> feeData) {
     List<String> known =
         _defaultFieldOrder.where((f) => feeData.containsKey(f)).toList();
@@ -70,7 +70,7 @@ class _PayFeePageState extends State<PayFeePage> {
     return [...known, ...extra];
   }
 
-  // camelCase field name ko readable label me convert karta hai
+  // Converts a camelCase field name into a readable label
   // e.g. "monthlyFee" -> "Monthly Fee", "examFee" -> "Exam Fee"
   String _formatFieldLabel(String key) {
     if (key.isEmpty) return key;
@@ -85,7 +85,7 @@ class _PayFeePageState extends State<PayFeePage> {
   double _grandTotal = 0;
   bool _isSaving = false;
 
-  // Live search ke liye variables
+  // Variables for live search
   List<QueryDocumentSnapshot> _searchResults = [];
   bool _isSearching = false;
 
@@ -116,11 +116,11 @@ class _PayFeePageState extends State<PayFeePage> {
     try {
       String queryLower = query.toLowerCase();
 
-      // Firestore ki range query (isGreaterThanOrEqualTo/isLessThanOrEqualTo)
-      // case-sensitive hoti hai, is liye sirf active students fetch karke
-      // client-side pe case-insensitive "contains" match kiya ja raha hai —
-      // isse ek hi letter type karne par bhi (chahe capital ho ya small)
-      // student turant show ho jayega.
+      // Firestore's range query (isGreaterThanOrEqualTo/isLessThanOrEqualTo)
+      // is case-sensitive, so active students are fetched and then a
+      // case-insensitive "contains" match is done client-side — this way
+      // the student shows up instantly even after typing just one letter
+      // (whether capital or lowercase).
       var activeSnapshot = await schoolCollection('students')
           .where('status', isEqualTo: 'active')
           .get();
@@ -188,16 +188,16 @@ class _PayFeePageState extends State<PayFeePage> {
       _studentDoc = student;
       _feeDoc = feeSnapshot;
       _searchController.text = data['name'] ?? "";
-      _searchResults = []; // List select hone ke baad gayab ho jaye gi
+      _searchResults = []; // Hide the list after a selection is made
       _discountController.clear();
       _initPaidControllers();
       _calculateDues();
     });
   }
 
-  // Har fee field aur previous dues ke liye "Paid" controller taiyar karta
-  // hai — default poori due amount se bhara hota hai (yani agar staff koi
-  // field edit na kare to wo pehle jaisa "full payment" hi rahega).
+  // Prepares a "Paid" controller for each fee field and previous dues
+  // — filled by default with the full due amount (i.e. if staff doesn't
+  // edit a field, it stays a "full payment" as before).
   void _initPaidControllers() {
     for (var c in _paidControllers.values) {
       c.dispose();
@@ -230,8 +230,8 @@ class _PayFeePageState extends State<PayFeePage> {
     return double.tryParse(studentData['dues']?.toString() ?? '0') ?? 0;
   }
 
-  // Field ke against jitni amount pay ki ja rahi hai — kabhi bhi due se
-  // zyada ya 0 se kam nahi ho sakti.
+  // How much amount is being paid against a field — can never be
+  // more than the due or less than 0.
   double _paidFor(String field) {
     double due = _fieldDue(field);
     double input = double.tryParse(_paidControllers[field]?.text ?? '0') ?? 0;
@@ -260,8 +260,8 @@ class _PayFeePageState extends State<PayFeePage> {
     _updateRemaining();
   }
 
-  // Har field ka (due - paid) jama karke, discount minus karke live
-  // "Remaining Dues" nikalta hai.
+  // Sums each field's (due - paid), subtracts the discount, and gets
+  // the live "Remaining Dues".
   void _updateRemaining([String? _]) {
     if (_feeDoc == null || _studentDoc == null) return;
     var feeData = _feeDoc!.data() as Map<String, dynamic>? ?? {};
@@ -277,8 +277,8 @@ class _PayFeePageState extends State<PayFeePage> {
     setState(() => _remainingDues = totalRemaining);
   }
 
-  // Ek click mein sab fields + previous dues poori pay kar do (ikatha
-  // payment) — jaisa pehle default behaviour tha.
+  // Pay all fields + previous dues in full with one click (a lump-sum
+  // payment) — as was the previous default behaviour.
   void _payFullAmount() {
     if (_feeDoc == null) return;
     var feeData = _feeDoc!.data() as Map<String, dynamic>? ?? {};
@@ -292,8 +292,8 @@ class _PayFeePageState extends State<PayFeePage> {
     _updateRemaining();
   }
 
-  // Sab "Paid" boxes 0 kar do taake staff har field mein manually,
-  // alag-alag partial amount likh sake.
+  // Set all "Paid" boxes to 0 so staff can manually enter separate
+  // partial amounts in each field.
   void _clearAllPayments() {
     setState(() {
       for (var c in _paidControllers.values) {
@@ -316,14 +316,14 @@ class _PayFeePageState extends State<PayFeePage> {
       List<String> fieldKeys =
           feeData.keys.where((f) => !_nonFeeKeys.contains(f)).toList();
 
-      // Payment ke baad har field/dues mein kitni raqam baaki reh jayegi
+      // How much amount will remain in each field/dues after payment
       Map<String, double> fieldRemaining = {
         for (var f in fieldKeys) f: _fieldDue(f) - _paidFor(f)
       };
       double duesRemaining = _previousDuesAmount() - _duesPaidApplied();
 
-      // Discount ko pehle Previous Dues se, phir baqi fields se (tarteeb
-      // ke mutabiq) munha karte hain jab tak discount khatam na ho jaye.
+      // Subtract the discount from Previous Dues first, then from the
+      // rest of the fields (in order), until the discount is used up.
       double leftoverDiscount = discount;
       if (leftoverDiscount > 0) {
         double applied = leftoverDiscount.clamp(0, duesRemaining);
@@ -350,8 +350,8 @@ class _PayFeePageState extends State<PayFeePage> {
         'lastPaymentDate': DateTime.now().toString(),
       });
 
-      // Har field ab poori 0 nahi hoti — sirf jitna paid hua utna minus
-      // hota hai, baqi amount usi field mein reh jati hai.
+      // Each field no longer goes fully to 0 — only what was paid is
+      // subtracted, the remaining amount stays in that same field.
       batch.update(_feeDoc!.reference, {
         for (var f in fieldKeys)
           f: fieldRemaining[f]! > 0 ? fieldRemaining[f] : 0,
@@ -367,10 +367,10 @@ class _PayFeePageState extends State<PayFeePage> {
         'discount': discount,
         'totalAtPayment': _grandTotal,
         'date': FieldValue.serverTimestamp(),
-        // Is payment mein har field ke against kitna paid hua
+        // How much was paid against each field in this payment
         'paidBreakdown': {for (var f in fieldKeys) f: _paidFor(f)},
         'duesPaid': _duesPaidApplied(),
-        // Payment ke baad har field/dues mein kitna baaki reh gaya
+        // How much remained in each field/dues after payment
         'remainingAfterPayment': {
           for (var f in fieldKeys) f: fieldRemaining[f],
           'dues': duesRemaining > 0 ? duesRemaining : 0,
@@ -379,9 +379,9 @@ class _PayFeePageState extends State<PayFeePage> {
 
       await batch.commit();
 
-      // Receipt print karne ke liye is payment ki poori tafseel save kar
-      // lete hain — neeche setState() state reset kar deta he, is liye
-      // ye values abhi (commit ke foran baad) nikalna zaroori he.
+      // Save the full details of this payment for printing the receipt
+      // — setState() below resets the state, so these values need to be
+      // captured now (right after the commit).
       final receiptStudentName = (_studentDoc!['name'] ?? '').toString();
       final receiptFatherName = (_studentDoc!['fName'] ?? '').toString();
       final receiptClass = (_studentDoc!['class'] ?? '').toString();
@@ -412,7 +412,7 @@ class _PayFeePageState extends State<PayFeePage> {
           _grandTotal = 0;
         });
 
-        // Payment save hone ke baad receipt print karne ka option.
+        // Option to print the receipt after the payment is saved.
         final wantsReceipt = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -475,7 +475,7 @@ class _PayFeePageState extends State<PayFeePage> {
       body: SafeArea(child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(children: [
-          // Search TextField aur uske neche live suggestions list
+          // Search TextField and the live suggestions list below it
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -662,7 +662,7 @@ class _PayFeePageState extends State<PayFeePage> {
 
               const Divider(thickness: 2),
 
-              // Previous dues ka apna alag row
+              // Previous dues gets its own separate row
               _feeFieldRow(null, isDuesRow: true),
 
               const SizedBox(height: 10),
@@ -742,8 +742,8 @@ class _PayFeePageState extends State<PayFeePage> {
     );
   }
 
-  // Ek fee field (ya previous dues) ke liye row banata hai: label, due
-  // amount, aur editable "paid now" box.
+  // Builds a row for one fee field (or previous dues): label, due
+  // amount, and an editable "paid now" box.
   Widget _feeFieldRow(String? field, {bool isDuesRow = false}) {
     final double due = isDuesRow ? _previousDuesAmount() : _fieldDue(field!);
     final TextEditingController controller =
@@ -806,10 +806,11 @@ class _PayFeePageState extends State<PayFeePage> {
           .get();
       var batch = FirebaseFirestore.instance.batch();
 
-      // Har student ke fee_structures doc ko sequentially (await loop ke
-      // andar) parhne ke bajaye, sab ek sath parallel mein parhte hain —
-      // result/logic bilkul same rehta hai, sirf poora kaam ek sath hota
-      // hai isliye bohat zyada students hone par bhi ye step fast rehta hai.
+      // Instead of reading each student's fee_structures doc
+      // sequentially (inside an await loop), all of them are read
+      // together in parallel — the result/logic stays exactly the same,
+      // just the whole thing happens at once, so this step stays fast
+      // even with a lot of students.
       var duesUpdates = await Future.wait(students.docs.map((doc) async {
         var feeDoc =
             await schoolCollection('fee_structures').doc(doc.id).get();

@@ -20,8 +20,8 @@ class _StudentReportSearchPageState extends State<StudentReportSearchPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
-  // Search box mein type karte waqt (setState) stream dobara na bane,
-  // is liye ek dafa bana kar rakh lete hain.
+  // Build the stream once and keep it, so it doesn't get recreated
+  // (via setState) every time something is typed in the search box.
   late final Stream<QuerySnapshot> _studentsStream =
       schoolCollection('students').snapshots();
 

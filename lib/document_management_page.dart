@@ -8,17 +8,20 @@ import 'package:intl/intl.dart';
 import 'school_context.dart';
 import 'class_section_service.dart';
 
-/// File extensions that Cloudinary can upload/serve under its "image"
-/// resource type (this includes PDFs — Cloudinary can render/preview
-/// them like images). Anything else (Word, Excel, PowerPoint, txt,
-/// zip, etc.) must be uploaded as "raw" or Cloudinary rejects it.
+/// File extensions that should be uploaded to Cloudinary under its
+/// "image" resource type. PDFs are intentionally NOT included here:
+/// Cloudinary can technically accept a PDF as an "image" resource, but
+/// by default it blocks public delivery of PDFs (and ZIPs) uploaded
+/// that way for security reasons — the URL comes back with a 401 even
+/// though the upload itself succeeds. Uploading PDFs as "raw" instead
+/// (same as Word/Excel/PowerPoint/txt) avoids that restriction entirely
+/// and lets them be viewed/downloaded normally.
 const List<String> _imageLikeExtensions = [
   'jpg',
   'jpeg',
   'png',
   'gif',
   'webp',
-  'pdf'
 ];
 
 /// Extensions the admin is allowed to pick under "Choose Document".
@@ -325,12 +328,12 @@ class _SchoolDocumentsTab extends StatelessWidget {
   }
 }
 
-/// Class-wide notices/documents: admin ek class select kar ke koi
-/// document/paper us poore class ko bhej sakta he (sab sections
-/// samet) — wo document us class ke har student ke parent ko apni
-/// Documents list mein show hota he, aur yahan se delete bhi ho sakta
-/// he. Ye students/staff ke individual documents se alag he — un ki
-/// tarah kisi ek student se link nahi, balke poori class se link he.
+/// Class-wide notices/documents: the admin can select a class and send
+/// a document/paper to that entire class (including all sections) — that
+/// document shows up in the Documents list of every student's parent in
+/// that class, and can also be deleted from here. This is different from
+/// students'/staff's individual documents — instead of being linked to
+/// one student, it's linked to the whole class.
 class _ClassDocumentsTab extends StatefulWidget {
   const _ClassDocumentsTab();
 
@@ -353,12 +356,12 @@ class _ClassDocumentsTabState extends State<_ClassDocumentsTab> {
               final classes = snapshot.data?.classes ?? [];
               if (classes.isEmpty) {
                 return const Text(
-                  "Pehle Settings se Classes & Sections set karein.",
+                  "Please set up Classes & Sections in Settings first.",
                   style: TextStyle(color: Colors.grey),
                 );
               }
-              // Agar pehle select ki hui class ab list mein nahi (delete ho
-              // gayi ho), to selection clear kar dete hain.
+              // If the previously selected class is no longer in the
+              // list (it was deleted), clear the selection.
               if (_selectedClass != null &&
                   !classes.contains(_selectedClass)) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -498,8 +501,8 @@ class _DocumentListPanelState extends State<_DocumentListPanel> {
                   border: OutlineInputBorder(),
                 ),
               ),
-              // Important documents (B-Form, CNIC, waghera) parents ki
-              // documents list mein sab se upar dikhte hain.
+              // Important documents (B-Form, CNIC, etc.) show at the top
+              // of the parent's documents list.
               CheckboxListTile(
                 value: markImportant,
                 contentPadding: EdgeInsets.zero,

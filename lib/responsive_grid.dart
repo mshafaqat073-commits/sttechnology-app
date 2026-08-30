@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Reusable responsive grid — ise kisi bhi dashboard/page mein import
-/// kar ke use karein, taake har file mein alag se LayoutBuilder /
-/// crossAxisCount logic na likhna pade.
+/// Reusable responsive grid — import and use this in any
+/// dashboard/page, so LayoutBuilder / crossAxisCount logic doesn't
+/// need to be written separately in every file.
 ///
 /// Usage:
 /// ```dart
@@ -19,20 +19,20 @@ class ResponsiveGrid extends StatelessWidget {
   final List<Widget> children;
   final EdgeInsetsGeometry padding;
 
-  /// Fallback jab mainSpacing/crossSpacing na diye gaye hon.
+  /// Fallback for when mainSpacing/crossSpacing aren't given.
   final double spacing;
   final double? mainSpacing;
   final double? crossSpacing;
 
-  /// Agar grid kisi scrollable Column/ListView ke andar nested ho
-  /// (khud scroll nahi karna), to `shrinkWrap: true` aur
-  /// `physics: NeverScrollableScrollPhysics()` pass karein.
+  /// If the grid is nested inside a scrollable Column/ListView (it
+  /// shouldn't scroll itself), pass `shrinkWrap: true` and
+  /// `physics: NeverScrollableScrollPhysics()`.
   final bool shrinkWrap;
   final ScrollPhysics? physics;
 
-  /// Optional override — agar diya jaye to width-based default
-  /// aspectRatio ke bajaye hamesha yehi use hoga (jaise form-field
-  /// grids jinka shape dashboard cards se alag hota hai).
+  /// Optional override — if given, this will always be used instead
+  /// of the width-based default aspectRatio (e.g. for form-field grids
+  /// whose shape differs from dashboard cards).
   final double? aspectRatio;
 
   const ResponsiveGrid({

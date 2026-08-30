@@ -18,14 +18,31 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _userController = TextEditingController();
   final TextEditingController _passController = TextEditingController();
   bool _isLoading = false;
-  bool _isObscure = true; // Password hide/show ke liye
+  bool _isObscure = true; // For password hide/show
+
+  @override
+  void initState() {
+    super.initState();
+    // Show the LAST logged-in school's own logo right away (cached
+    // locally), instead of the generic default — no Firestore call
+    // needed for this, it's just what got saved after the last
+    // successful login below.
+    _loadLastKnownLogo();
+  }
+
+  Future<void> _loadLastKnownLogo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedLogoUrl = prefs.getString('last_school_logo_url');
+    if (!mounted) return;
+    SchoolContext.applyCachedPreLoginLogo(cachedLogoUrl);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Custom back arrow (role selector par wapas) — dark gradient
-      // background par default black back-arrow ki jagah ab white aur
-      // hamesha nazar aane wala.
+      // Custom back arrow (back to role selector) — white and always
+      // visible now, instead of the default black back-arrow on a dark
+      // gradient background.
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -45,7 +62,10 @@ class _LoginPageState extends State<LoginPage> {
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              child: Column(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 460),
+                  child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   // Logo badge
@@ -197,6 +217,8 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ],
               ),
+                ),
+              ),
             ),
           ),
         ),
@@ -217,20 +239,21 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Login ke waqt abhi tak pata nahi ke ye admin kis school ka hai,
-      // is liye collectionGroup se SAARI schools ke 'users' subcollections
-      // mein sirf USERNAME se dhoondte hain (password Firestore mein ab
-      // store hi nahi hota — asal check niche Firebase Auth karta hai).
+      // 1. At login time it isn't known yet which school this admin
+      // belongs to, so a collectionGroup search across ALL schools'
+      // 'users' subcollections is done, by USERNAME only (the password
+      // is no longer stored in Firestore at all — the actual check
+      // below is done by Firebase Auth).
       //
-      // "users" collection publicly readable hai (dekhein firestore.rules)
-      // kyunke isme ab koi secret nahi — sirf username aur ek internal
-      // (fake, kabhi khud password ka kaam na karne wali) authEmail hoti
-      // hai.
+      // The "users" collection is publicly readable (see
+      // firestore.rules) because it no longer holds any secret — just
+      // the username and an internal (fake, never itself used as a
+      // password) authEmail.
       //
-      // NOTE: Ye query apna alag try/catch rakhti hai taake network issue
-      // (no internet / timeout) ko "Invalid Username or Password" na keh
-      // dein — ye do bilkul alag cheezein hain aur user ko sahi wajah pata
-      // chalni chahiye.
+      // NOTE: This query keeps its own separate try/catch so that a
+      // network issue (no internet / timeout) isn't reported as
+      // "Invalid Username or Password" — these are two completely
+      // different things and the user should know the real reason.
       QuerySnapshot<Map<String, dynamic>> querySnapshot;
       try {
         querySnapshot = await FirebaseFirestore.instance
@@ -262,33 +285,42 @@ class _LoginPageState extends State<LoginPage> {
       final userDoc = querySnapshot.docs.first;
       final authEmail = userDoc.data()['authEmail'] as String?;
       if (authEmail == null || authEmail.isEmpty) {
-        // Purana record hai jo abhi Firebase Auth par migrate nahi hua
-        // (migrate_admin_to_auth.js chalana baaqi hai).
+        // This is an old record that hasn't been migrated to Firebase
+        // Auth yet (migrate_admin_to_auth.js still needs to be run).
         _showError(
             "This account has not been updated yet. Please contact the Developer/Admin.");
         return;
       }
 
-      // 2. Asal password check yahan Firebase Auth khud (securely, server
-      // side) karta hai — Firestore mein kahin bhi plaintext password
-      // nahi jaata.
+      // 2. The actual password check here is done by Firebase Auth itself
+      // (securely, server-side) — the plaintext password never goes
+      // anywhere in Firestore.
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: authEmail,
         password: typedPassword,
       );
 
-      // 3. Ye doc kis school ke andar hai, wo maloom kar ke poori app ke
-      // liye active school set kar dete hain.
+      // 3. Find out which school this doc belongs to, and set it as
+      // the active school for the whole app.
       SchoolContext.set(schoolIdFromDoc(userDoc.reference));
-      // School ka naam/logo (Settings > School Name/Logo se) cache kar
-      // lete hain taake Dashboard aur PDFs turant sahi branding dikhayein.
+      // Cache the school's name/logo (from Settings > School Name/Logo)
+      // so the Dashboard and PDFs immediately show the correct branding.
       await SchoolContext.loadBranding();
 
       final prefs = await SharedPreferences.getInstance();
-      // Sirf username save karte hain (convenience/prefill ke liye) —
-      // password ab kahin bhi (Firestore ya SharedPreferences) plaintext
-      // store nahi hota.
+      // Only the username is saved (for convenience/prefill) — the
+      // password is no longer stored anywhere (Firestore or
+      // SharedPreferences) in plaintext.
       await prefs.setString('saved_username', typedUsername);
+      // Remember this school's logo locally, so next time the Admin
+      // Login screen opens (even before typing anything), it shows
+      // this same school's logo instead of the generic default.
+      final loggedInLogoUrl = SchoolContext.logoUrl;
+      if (loggedInLogoUrl != null && loggedInLogoUrl.isNotEmpty) {
+        await prefs.setString('last_school_logo_url', loggedInLogoUrl);
+      } else {
+        await prefs.remove('last_school_logo_url');
+      }
 
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -296,9 +328,9 @@ class _LoginPageState extends State<LoginPage> {
         MaterialPageRoute(builder: (context) => const DashboardPage()),
       );
     } on FirebaseAuthException catch (e) {
-      // Wrong password, disabled account, waghera — sab ko generic
-      // message dete hain taake attacker ko pata na chale ke kya ghalat
-      // tha (username exist karta hai ya password).
+      // Wrong password, disabled account, etc. — a generic message is
+      // given for all of these so an attacker can't tell what was wrong
+      // (whether the username exists or the password).
       if (e.code == 'wrong-password' ||
           e.code == 'user-not-found' ||
           e.code == 'invalid-credential' ||

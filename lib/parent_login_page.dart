@@ -113,7 +113,10 @@ class _ParentLoginPageState extends State<ParentLoginPage> {
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
-            child: Column(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(Icons.family_restroom,
@@ -199,6 +202,8 @@ class _ParentLoginPageState extends State<ParentLoginPage> {
                   ),
                 ),
               ],
+                ),
+              ),
             ),
           ),
         ),

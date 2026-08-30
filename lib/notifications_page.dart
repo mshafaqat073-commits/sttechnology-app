@@ -6,17 +6,17 @@ import 'school_context.dart';
 // ============================================================================
 // NotificationsPage
 // ----------------------------------------------------------------------------
-// Logged-in student/teacher (ya parent, jinke multiple bachay hon) ke
-// notifications ki list (bell icon se khulti he). 'push_notifications'
-// collection se sirf in [uids] ke (toId whereIn uids) documents dikhata
-// he, sab se naye upar.
+// The list of notifications for the logged-in student/teacher (or
+// parent, if they have multiple children) — opened from the bell icon.
+// Shows only documents from the 'push_notifications' collection for
+// these [uids] (toId whereIn uids), newest at the top.
 //
-// Requires: intl package (pubspec.yaml mein `intl: ^0.19.0` add karein
-// agar pehle se nahi hai).
+// Requires: intl package (add `intl: ^0.19.0` in pubspec.yaml if it
+// isn't already there).
 // ============================================================================
 
 class NotificationsPage extends StatelessWidget {
-  // Ek uid (student/teacher) ya parent ke case mein sab siblings ke uids.
+  // One uid (student/teacher), or all siblings' uids in a parent's case.
   final List<String> uids;
   const NotificationsPage({super.key, required this.uids});
 
@@ -39,8 +39,8 @@ class NotificationsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Firestore whereIn max 30 values leta he — normal use case (siblings)
-    // ke liye ye kaafi zyada he.
+    // Firestore's whereIn takes a max of 30 values — plenty for the
+    // normal use case (siblings).
     final queryIds = uids.take(30).toList();
 
     return Scaffold(
@@ -71,11 +71,11 @@ class NotificationsPage extends StatelessWidget {
       body: queryIds.isEmpty
           ? const Center(child: Text("No notifications yet."))
           : StreamBuilder<QuerySnapshot>(
-              // Note: 'orderBy' yahan jaan-boojh kar nahi lagaya — 'whereIn'
-              // ke sath alag field par 'orderBy' lagane se Firestore ek
-              // composite index maangta he (jo Firebase Console mein
-              // manually banana parta he). Is se bachne ke liye docs ko
-              // fetch karne ke baad neeche Dart mein sort kar rahe hain.
+              // Note: 'orderBy' is deliberately not used here — using
+              // 'orderBy' on a different field alongside 'whereIn' makes
+              // Firestore require a composite index (which has to be
+              // built manually in the Firebase Console). To avoid that,
+              // the docs are sorted in Dart below after fetching.
               stream: schoolCollection('push_notifications')
                   .where('toId', whereIn: queryIds)
                   .limit(100)
@@ -95,7 +95,7 @@ class NotificationsPage extends StatelessWidget {
                     final bTs = (b.data() as Map<String, dynamic>)['createdAt']
                         as Timestamp?;
                     if (aTs == null || bTs == null) return 0;
-                    return bTs.compareTo(aTs); // sab se naya pehle
+                    return bTs.compareTo(aTs); // newest first
                   });
                 if (docs.isEmpty) {
                   return const Center(

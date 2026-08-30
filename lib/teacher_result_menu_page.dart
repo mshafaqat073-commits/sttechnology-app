@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'teacher_enter_result_page.dart';
 import 'teacher_view_result_page.dart';
+import 'bulk_enter_result_page.dart'; // Whole-class result entry (fast entry for many students)
 
 // Teacher-only version of the result menu. Unlike the admin's
 // ResultMenuPage, this always restricts Enter/View result access to the
@@ -25,6 +26,19 @@ class TeacherResultMenuPage extends StatelessWidget {
               MaterialPageRoute(
                 builder: (context) =>
                     TeacherEnterResultPage(allowedClasses: assignedClasses),
+              ),
+            ),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.groups, size: 40, color: Colors.deepPurple),
+            title: const Text("Enter Result (Whole Class)", style: TextStyle(fontSize: 18)),
+            subtitle: const Text("Enter subjects/marks once, then just type obtained marks"),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    BulkEnterResultPage(allowedClasses: assignedClasses),
               ),
             ),
           ),

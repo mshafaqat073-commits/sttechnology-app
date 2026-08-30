@@ -27,7 +27,7 @@ class _SetFeePageState extends State<SetFeePage> {
     'other': TextEditingController(),
   };
 
-  // Har field ki display label (custom fields add hone par bhi sahi naam dikhane ke liye)
+  // Display label for each field (to show the correct name even after custom fields are added)
   final Map<String, String> _fieldLabels = {
     'monthlyFee': 'Monthly Fee',
     'admissionFee': 'Admission Fee',
@@ -41,10 +41,10 @@ class _SetFeePageState extends State<SetFeePage> {
     'other': 'Other',
   };
 
-  // Ye default fields hain — inhe delete nahi kiya ja sakega
+  // These are the default fields — they cannot be deleted
   late final Set<String> _defaultFieldKeys = _controllers.keys.toSet();
 
-  // User ke type kiye naam ko Firestore-friendly camelCase key mein convert karta hai
+  // Converts the name typed by the user into a Firestore-friendly camelCase key
   String _labelToKey(String label) {
     final words = label.trim().split(RegExp(r'\s+'));
     String key = words.first.toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
@@ -123,17 +123,17 @@ class _SetFeePageState extends State<SetFeePage> {
 
     var batch = FirebaseFirestore.instance.batch();
 
-    // 1. Fee Structure set karein
+    // 1. Set the Fee Structure
     var feeDocRef = schoolCollection('fee_structures').doc(widget.docId);
     batch.set(feeDocRef, feeData, SetOptions(merge: true));
 
-    // 2. Student collection mein monthlyFee update karein
+    // 2. Update monthlyFee in the Student collection
     var studentDocRef = schoolCollection('students').doc(widget.docId);
     batch.update(studentDocRef, {
       'monthlyFee': monthlyFeeValue, 
     });
 
-    // CRITICAL: Batch ko commit karna zaroori hai!
+    // CRITICAL: The batch must be committed!
     await batch.commit(); 
     
     if (mounted) {

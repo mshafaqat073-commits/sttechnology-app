@@ -3,13 +3,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'school_context.dart';
 
-/// Admin ye page se dekh sakta hai ke kaunse Parents aur Staff members ne
-/// app open ki hai (aur last kab), aur kaun abhi tak app use hi nahi kar
-/// raha (authUid missing = login/app use nahi kiya).
+/// Admin can use this page to see which Parents and Staff members have
+/// opened the app (and when last), and who hasn't used the app at all yet
+/// (authUid missing = never logged in/used the app).
 ///
-/// Data source: 'students' (parent side) aur 'staff' collection ke
-/// 'authUid' aur 'lastLoginAt' fields — jo main.dart ki _RoleRouter mein
-/// har successful login par update hote hain.
+/// Data source: the 'authUid' and 'lastLoginAt' fields on the 'students'
+/// (parent side) and 'staff' collections — updated by main.dart's
+/// _RoleRouter on every successful login.
 class AppUsagePage extends StatefulWidget {
   const AppUsagePage({super.key});
 
@@ -21,9 +21,9 @@ class _AppUsagePageState extends State<AppUsagePage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
-  // Streams ek dafa initState mein bana lete hain — pehle ye seedha
-  // build() ke andar bante the, jiski wajah se tab switch ya kisi bhi
-  // rebuild par Firestore se dobara connect (naya listener) hota tha.
+  // Streams are created once in initState — previously these were
+  // created directly inside build(), which caused Firestore to
+  // reconnect (a new listener) on every tab switch or any rebuild.
   late final Stream<QuerySnapshot> _parentsStream = schoolCollection('students')
       .where('status', isEqualTo: 'active')
       .snapshots();
@@ -89,8 +89,8 @@ class _AppUsagePageState extends State<AppUsagePage>
           return const Center(child: CircularProgressIndicator());
         }
         var docs = snapshot.data!.docs.toList();
-        // Jinhon ne app use ki (lastLoginAt hai) unko upar dikhayein,
-        // sabse recent pehle. Jinhon ne kabhi use nahi ki wo neeche.
+        // Show those who have used the app (have lastLoginAt) at the top,
+        // most recent first. Those who never used it go below.
         docs.sort((a, b) {
           final aTs =
               (a.data() as Map<String, dynamic>)['lastLoginAt'] as Timestamp?;

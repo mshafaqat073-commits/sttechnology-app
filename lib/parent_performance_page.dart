@@ -4,14 +4,14 @@ import 'package:intl/intl.dart';
 import 'school_context.dart';
 import 'performance_bar_chart.dart';
 
-/// "Overall Performance" button ka page — Parent Dashboard se ek bache ke
-/// child-menu me khulta hai. Teen collections se live data uthata hai
-/// (koi naya collection/field nahi banaya — jo already app me use ho raha
-/// hai wahi read kiya hai):
+/// The page for the "Overall Performance" button — opens from the child's
+/// menu in the Parent Dashboard. Pulls live data from three collections
+/// (no new collection/field was created — reads whatever is already
+/// used in the app):
 ///   - results        (studentId, term, percentage, grade, date)
 ///   - attendance     (studentId, date, status)
 ///   - fee_history    (studentId, date, amountPaid)
-/// Aur inhi teeno se combine karke ek graph + remarks bana deta hai.
+/// Combines these three to build a graph + remarks.
 class ParentPerformancePage extends StatefulWidget {
   final String studentId;
   final String studentName;

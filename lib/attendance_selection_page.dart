@@ -33,13 +33,13 @@ class _AttendanceSelectionPageState extends State<AttendanceSelectionPage> {
     _fetchOverallAttendanceSummary();
   }
 
-  // Aaj ki date ka mukammal summary data fetch karne ka function
+  // Function to fetch the full summary data for today's date
   Future<void> _fetchOverallAttendanceSummary() async {
     try {
-      // Pehle yahan har student/teacher ke liye alag se doc().get() call
-      // hoti thi (N+1 pattern) — poori school ke liye ye sabse bhaari
-      // query thi. Ab students/teachers aur unki aaj ki attendance
-      // sirf 4 queries mein, parallel mangwate hain.
+      // Previously a separate doc().get() call was made here for each
+      // student/teacher (N+1 pattern) — for the whole school, this was
+      // the heaviest query. Now students/teachers and their attendance
+      // for today are fetched in just 4 queries, in parallel.
       final results = await Future.wait([
         schoolCollection('students').get(),
         schoolCollection('attendance')
@@ -134,12 +134,12 @@ class _AttendanceSelectionPageState extends State<AttendanceSelectionPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // --- LOADING OR SUMMARY CARDS SECTION (Category text se upar) ---
+            // --- LOADING OR SUMMARY CARDS SECTION (above the Category text) ---
             _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : Column(
                     children: [
-                      // Students Summary Card (Students Button ke uper)
+                      // Students Summary Card (above the Students Button)
                       _buildSummaryCard(
                         title: "Students Today's Summary",
                         total: totalStudentsCount,
@@ -151,7 +151,7 @@ class _AttendanceSelectionPageState extends State<AttendanceSelectionPage> {
                       ),
                       const SizedBox(height: 12),
 
-                      // Teachers Summary Card (Teachers Button ke uper)
+                      // Teachers Summary Card (above the Teachers Button)
                       _buildSummaryCard(
                         title: "Teachers Today's Summary",
                         total: totalTeachersCount,

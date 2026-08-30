@@ -28,13 +28,13 @@ class _AddMonthlyFeePageState extends State<AddMonthlyFeePage> {
     );
 
     try {
-      // Active students ki list lein
+      // Get the list of active students
       var students = await schoolCollection('students')
           .where('status', isEqualTo: 'active')
           .get();
 
       if (students.docs.isEmpty) {
-        if (context.mounted) Navigator.pop(context); // Dialog hatayein
+        if (context.mounted) Navigator.pop(context); // Dismiss dialog
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("No active student found!")));
         setState(() => _isProcessing = false);
@@ -43,12 +43,12 @@ class _AddMonthlyFeePageState extends State<AddMonthlyFeePage> {
 
       var batch = FirebaseFirestore.instance.batch();
 
-      // Har student ko kitna amount add hua — ye map hi baad mein "Undo"
-      // karne ke kaam aayega (kisay kitna wapis minus karna hai).
+      // How much amount was added for each student — this map is used
+      // later for "Undo" (how much to subtract back for whom).
       Map<String, double> studentAmounts = {};
 
       for (var doc in students.docs) {
-        // students table se monthlyFee ki value nikalna
+        // Get the monthlyFee value from the students table
         double studentFee =
             double.tryParse(doc.data()['monthlyFee']?.toString() ?? '0') ?? 0;
 
@@ -56,16 +56,16 @@ class _AddMonthlyFeePageState extends State<AddMonthlyFeePage> {
           var feeRef = schoolCollection('fee_structures')
               .doc(doc.id);
 
-          // FieldValue.increment ka istemal taake pehli fee mein nayi fee khud-ba-khud sum ho jaye
+          // Using FieldValue.increment so the new fee is automatically added to the existing fee
           batch.set(feeRef, {'monthlyFee': FieldValue.increment(studentFee)},
-              SetOptions(merge: true) // Baaki fields ko mehfooz rakhne ke liye
+              SetOptions(merge: true) // To preserve the rest of the fields
               );
 
           studentAmounts[doc.id] = studentFee;
         }
       }
 
-      // Is operation ka log save karein taake baad mein "Undo" kiya ja sake
+      // Save a log of this operation so it can be undone later
       var logRef =
           schoolCollection('bulk_fee_operations').doc();
       batch.set(logRef, {
@@ -80,16 +80,16 @@ class _AddMonthlyFeePageState extends State<AddMonthlyFeePage> {
 
       await batch.commit();
 
-      // Success par Dialog hatayein aur message dikhayein
+      // On success, dismiss the dialog and show a message
       if (context.mounted) {
-        Navigator.pop(context); // Dialog hatayein
+        Navigator.pop(context); // Dismiss dialog
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text(
                 "Success: Monthly fee added & summed in all fee structures!")));
       }
     } catch (e) {
       if (context.mounted) {
-        Navigator.pop(context); // Dialog hatayein
+        Navigator.pop(context); // Dismiss dialog
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text("Error: $e")));
       }
@@ -98,9 +98,9 @@ class _AddMonthlyFeePageState extends State<AddMonthlyFeePage> {
     }
   }
 
-  // Ek pehle se kiye gaye "Add Monthly Fee" operation ko reverse karta hai —
-  // har student se utni hi amount wapis minus kar deta hai jitni us waqt
-  // add hui thi, aur log ko "reverted" mark kar deta hai.
+  // Reverses a previously performed "Add Monthly Fee" operation —
+  // subtracts back the same amount from each student that was added at
+  // that time, and marks the log as "reverted".
   Future<void> _undoOperation(
       BuildContext context, DocumentSnapshot logDoc) async {
     var data = logDoc.data() as Map<String, dynamic>;
@@ -199,7 +199,7 @@ class _AddMonthlyFeePageState extends State<AddMonthlyFeePage> {
                   .limit(5)
                   .snapshots(),
               builder: (context, snapshot) {
-                // Firestore se koi error aaya (jaise missing composite index)
+                // An error came from Firestore (e.g. missing composite index)
                 if (snapshot.hasError) {
                   return Padding(
                     padding: const EdgeInsets.all(16),

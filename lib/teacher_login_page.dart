@@ -113,7 +113,10 @@ class _TeacherLoginPageState extends State<TeacherLoginPage> {
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
-            child: Column(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(Icons.school, size: 70, color: Colors.white),
@@ -205,6 +208,8 @@ class _TeacherLoginPageState extends State<TeacherLoginPage> {
                   ),
                 ),
               ],
+                ),
+              ),
             ),
           ),
         ),

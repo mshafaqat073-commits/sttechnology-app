@@ -4,8 +4,8 @@ import 'notification_helper.dart';
 import 'school_context.dart';
 
 class TeacherAttendancePage extends StatefulWidget {
-  // Teacher ko multiple classes/sections assign ho sakte hain.
-  // Each entry: {'class': '6', 'section': 'A'} — section empty bhi ho sakti hai.
+  // A teacher can be assigned multiple classes/sections.
+  // Each entry: {'class': '6', 'section': 'A'} — section can be empty.
   final List<Map<String, String>> assignedClasses;
 
   const TeacherAttendancePage({
@@ -82,17 +82,17 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
     }
   }
 
-  // Currently selected class/section ke students ke liye is date ki
-  // maujooda attendance load karta hai (agar pehle se mark ho chuki ho),
-  // warna default 'Present'.
+  // Loads the existing attendance for this date for the currently
+  // selected class/section's students (if it was already marked),
+  // otherwise defaults to 'Present'.
   Future<void> _loadStudentAttendanceForDate() async {
     setState(() => _isLoadingStudents = true);
 
     try {
-      // Pehle har student ke liye alag se doc().get() call hoti thi
-      // (N+1 pattern). Ab class ke students aur us din ki attendance
-      // sirf 2 queries mein, parallel mangwate hain — result bilkul
-      // wahi rehta hai, sirf loading tez ho jati hai.
+      // Previously this made a separate doc().get() call per student
+      // (N+1 pattern). Now the class's students and that day's attendance
+      // are fetched in just 2 parallel queries — the result is exactly
+      // the same, only the loading is faster.
       final results = await Future.wait([
         _studentsQuery().get(),
         schoolCollection('attendance')
@@ -135,9 +135,9 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
       for (var entry in studentAttendanceMap.entries) {
         String studentId = entry.key;
         String status = entry.value;
-        // NOTE: docId sirf date + studentId par based he — admin attendance
-        // page aur QR scanner ke saath consistent, taake ek din mein har
-        // student ka sirf EK hi attendance record bane.
+        // NOTE: docId is based only on date + studentId — kept consistent
+        // with the admin attendance page and QR scanner, so that each
+        // student gets only ONE attendance record per day.
         String docId = "${formattedDate}_$studentId";
 
         var docRef = schoolCollection('attendance').doc(docId);
@@ -157,7 +157,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
 
       await batch.commit();
 
-      // Jo students aaj 'Absent' mark hue hain, unhe notification bhejte hain.
+      // Send a notification to students marked 'Absent' today.
       final absentIds = studentAttendanceMap.entries
           .where((e) => e.value == 'Absent')
           .map((e) => e.key)
@@ -185,9 +185,9 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
     }
   }
 
-  // Absent mark hue students ke fcmToken Firestore se nikal kar unhe
-  // notification bhejta hai. FieldPath.documentId whereIn ki 30 ids/query
-  // ki limit hoti he, is liye chunks banate hain.
+  // Pulls the fcmToken for students marked Absent from Firestore and
+  // sends them a notification. FieldPath.documentId whereIn has a limit
+  // of 30 ids/query, so the ids are split into chunks.
   Future<void> _notifyAbsentStudents(List<String> studentIds) async {
     try {
       final targets = <Map<String, String?>>[];
