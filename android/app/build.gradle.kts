@@ -1,9 +1,13 @@
 import java.util.Properties
 import java.io.FileInputStream
 
-// key.properties file se signing details load karta he — is file ko
-// KABHI bhi git/version control mein commit nahi karna, isme keystore
-// password hote hain. android/key.properties banao (agla message dekho).
+// Loads signing details from the key.properties file — NEVER commit this
+// file to git/version control, it contains your keystore passwords.
+// Create android/key.properties with:
+//   storePassword=<your keystore password>
+//   keyPassword=<your key password>
+//   keyAlias=<your key alias>
+//   storeFile=<path to your .jks file>
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
@@ -55,14 +59,29 @@ android {
 
     buildTypes {
         release {
-            // key.properties na mile to debug key par fallback (taake local
-            // build kabhi crash na ho) — Play Store ke liye upload karne se
-            // pehle key.properties zaroor bana lena.
-            signingConfig = if (keystorePropertiesFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            // FAIL FAST instead of silently signing with the debug key.
+            // The previous fallback to the debug signingConfig here was the
+            // root cause of "App not installed as package conflicts with an
+            // existing package" errors on update: any release APK built
+            // without key.properties present got silently signed with a
+            // machine-specific debug key instead of the real release key,
+            // producing a signature mismatch against previously installed
+            // (correctly signed) versions. Failing the build here forces
+            // key.properties to be present for every release build, so a
+            // wrongly-signed APK can never be produced or published by
+            // accident.
+            if (!keystorePropertiesFile.exists()) {
+                throw GradleException(
+                    "Release build aborted: android/key.properties not found. " +
+                    "A release build MUST be signed with the real release " +
+                    "keystore — building without key.properties would silently " +
+                    "fall back to the debug key and break updates for users " +
+                    "already on a properly signed version. Create " +
+                    "android/key.properties (see comment at the top of this " +
+                    "file for the required fields) before building a release APK."
+                )
             }
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

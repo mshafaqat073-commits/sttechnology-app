@@ -24,6 +24,7 @@ import 'change_pin_dialog.dart';
 import 'parent_performance_page.dart';
 import 'performance_bar_chart.dart';
 import 'app_update_checker.dart';
+import 'parent_home_task_page.dart';
 
 /// This dashboard opens after Parent login — every student (sibling)
 /// linked to that phone number is listed here.
@@ -209,6 +210,7 @@ class ParentDashboard extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => ParentHomeTaskPage(
+                            studentId: studentId,
                             className: className,
                             section: section,
                           ),
@@ -440,8 +442,24 @@ class ParentDashboard extends StatelessWidget {
             onSelected: (value) {
               switch (value) {
                 case 'update':
-                  AppUpdateChecker.of(context)
-                      ?.checkForUpdate(showResult: true);
+                  final updateChecker = AppUpdateChecker.of(context);
+                  debugPrint(
+                      '[UpdateButton] AppUpdateChecker.of(context) is ${updateChecker == null ? "NULL (ancestor not found!)" : "found OK"}');
+                  if (updateChecker == null) {
+                    // Without this, a null ancestor meant the button tap
+                    // silently did nothing — no dialog, no snackbar, no
+                    // error. Fall back to a local ScaffoldMessenger so the
+                    // user always gets some feedback from the tap.
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Update checker is not ready yet — please try again in a moment.',
+                        ),
+                      ),
+                    );
+                  } else {
+                    updateChecker.checkForUpdate(showResult: true);
+                  }
                   break;
                 case 'pin':
                   _changePin(context);
@@ -450,8 +468,7 @@ class ParentDashboard extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                        builder: (context) =>
-                            const AIChatPage(role: 'parent')),
+                        builder: (context) => const AIChatPage(role: 'parent')),
                   );
                   break;
                 case 'logout':
@@ -554,79 +571,81 @@ class ParentDashboard extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 700),
                 child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: children.length,
-              itemBuilder: (context, index) {
-                var data = children[index].data() as Map<String, dynamic>;
-                String studentId = children[index].id;
-                String name = data['name'] ?? 'N/A';
-                String className = data['class'] ?? 'N/A';
-                String section = (data['section'] ?? '').toString().trim();
-                String imageUrl = data['imageUrl'] ?? '';
+                  padding: const EdgeInsets.all(16),
+                  itemCount: children.length,
+                  itemBuilder: (context, index) {
+                    var data = children[index].data() as Map<String, dynamic>;
+                    String studentId = children[index].id;
+                    String name = data['name'] ?? 'N/A';
+                    String className = data['class'] ?? 'N/A';
+                    String section = (data['section'] ?? '').toString().trim();
+                    String imageUrl = data['imageUrl'] ?? '';
 
-                return Card(
-                  elevation: 2,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  child: StreamBuilder<DocumentSnapshot>(
-                    // We listen to fee_structures live, so whenever admin
-                    // sets/edits the fee, dues update here instantly —
-                    // we don't depend only on student.dues (which is just
-                    // the previous outstanding amount).
-                    stream: schoolCollection('fee_structures')
-                        .doc(studentId)
-                        .snapshots(),
-                    builder: (context, feeSnapshot) {
-                      Map<String, dynamic>? feeData;
-                      if (feeSnapshot.hasData && feeSnapshot.data!.exists) {
-                        feeData =
-                            feeSnapshot.data!.data() as Map<String, dynamic>;
-                      }
-                      double dues = _computeTotalDues(data, feeData);
+                    return Card(
+                      elevation: 2,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      child: StreamBuilder<DocumentSnapshot>(
+                        // We listen to fee_structures live, so whenever admin
+                        // sets/edits the fee, dues update here instantly —
+                        // we don't depend only on student.dues (which is just
+                        // the previous outstanding amount).
+                        stream: schoolCollection('fee_structures')
+                            .doc(studentId)
+                            .snapshots(),
+                        builder: (context, feeSnapshot) {
+                          Map<String, dynamic>? feeData;
+                          if (feeSnapshot.hasData && feeSnapshot.data!.exists) {
+                            feeData = feeSnapshot.data!.data()
+                                as Map<String, dynamic>;
+                          }
+                          double dues = _computeTotalDues(data, feeData);
 
-                      return ListTile(
-                        contentPadding: const EdgeInsets.all(12),
-                        leading: CircleAvatar(
-                          radius: 26,
-                          backgroundColor: Colors.indigo.shade100,
-                          backgroundImage: imageUrl.isNotEmpty
-                              ? NetworkImage(imageUrl)
-                              : null,
-                          child: imageUrl.isEmpty
-                              ? const Icon(Icons.person, color: Colors.indigo)
-                              : null,
-                        ),
-                        title: Text(name,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(
-                          section.isNotEmpty
-                              ? "Class: $className - $section"
-                              : "Class: $className",
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              dues > 0
-                                  ? "Dues: Rs. ${dues.toStringAsFixed(0)}"
-                                  : "No Dues",
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: dues > 0 ? Colors.red : Colors.green),
+                          return ListTile(
+                            contentPadding: const EdgeInsets.all(12),
+                            leading: CircleAvatar(
+                              radius: 26,
+                              backgroundColor: Colors.indigo.shade100,
+                              backgroundImage: imageUrl.isNotEmpty
+                                  ? NetworkImage(imageUrl)
+                                  : null,
+                              child: imageUrl.isEmpty
+                                  ? const Icon(Icons.person,
+                                      color: Colors.indigo)
+                                  : null,
                             ),
-                          ],
-                        ),
-                        onTap: () =>
-                            _openChildMenu(context, studentId, data, dues),
-                      );
-                    },
-                  ),
-                );
-              },
+                            title: Text(name,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold)),
+                            subtitle: Text(
+                              section.isNotEmpty
+                                  ? "Class: $className - $section"
+                                  : "Class: $className",
+                            ),
+                            trailing: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  dues > 0
+                                      ? "Dues: Rs. ${dues.toStringAsFixed(0)}"
+                                      : "No Dues",
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color:
+                                          dues > 0 ? Colors.red : Colors.green),
+                                ),
+                              ],
+                            ),
+                            onTap: () =>
+                                _openChildMenu(context, studentId, data, dues),
+                          );
+                        },
+                      ),
+                    );
+                  },
                 ),
               ),
             ),

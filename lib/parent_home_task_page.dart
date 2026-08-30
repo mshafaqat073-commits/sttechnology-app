@@ -1,19 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'school_context.dart';
+import 'student_issue_page.dart';
 
 // Read-only view of Diary / Homework / Special Message for one student's
 // class & section. Reads the same collections home_task_page.dart (admin)
 // writes to: 'school_diary', 'school_homework', 'special_messages'.
 // A record with no section set (whole-class) is shown to every section too.
+//
+// Also shows a 4th "Issues" tab — private messages posted for this exact
+// child only (via StudentIssuesParentList), filtered strictly by
+// studentId so siblings/classmates never see each other's messages.
 class ParentHomeTaskPage extends StatefulWidget {
   final String className;
   final String section;
+  // This child's own document id in the 'students' collection.
+  final String studentId;
 
   const ParentHomeTaskPage({
     super.key,
     required this.className,
     required this.section,
+    required this.studentId,
   });
 
   @override
@@ -27,7 +35,7 @@ class _ParentHomeTaskPageState extends State<ParentHomeTaskPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -124,6 +132,7 @@ class _ParentHomeTaskPageState extends State<ParentHomeTaskPage>
             Tab(text: "Diary"),
             Tab(text: "Homework"),
             Tab(text: "Message"),
+            Tab(text: "Issues"),
           ],
         ),
       ),
@@ -151,6 +160,7 @@ class _ParentHomeTaskPageState extends State<ParentHomeTaskPage>
                 body: d['message']?.toString() ?? '',
                 dateString: d['dateString']?.toString() ?? '',
               )),
+          StudentIssuesParentList(studentId: widget.studentId),
         ],
       ),
     );

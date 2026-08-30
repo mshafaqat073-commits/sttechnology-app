@@ -83,6 +83,18 @@ import 'package:path_provider/path_provider.dart';
 const String kVersionCheckUrl =
     'https://sttechnology.netlify.app/version.json';
 
+/// Attach these to MaterialApp (navigatorKey / scaffoldMessengerKey) in
+/// main.dart. AppUpdateChecker lives ABOVE the Navigator (it wraps
+/// MaterialApp's `builder:`), so its own BuildContext is not a descendant
+/// of the Navigator — using it directly with showDialog/ScaffoldMessenger
+/// throws "context does not include a Navigator". These global keys give
+/// us a context that IS inside the Navigator/Scaffold tree, regardless of
+/// where AppUpdateChecker itself sits.
+final GlobalKey<NavigatorState> appUpdateNavigatorKey =
+    GlobalKey<NavigatorState>();
+final GlobalKey<ScaffoldMessengerState> appUpdateScaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
+
 class AppUpdateChecker extends StatefulWidget {
   final Widget child;
   const AppUpdateChecker({super.key, required this.child});
@@ -132,16 +144,44 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
   /// When [showResult] is true, also shows an "already up to date" /
   /// "check failed" message — useful for a manual button.
   Future<void> checkForUpdate({bool showResult = false}) async {
-    if (kIsWeb || _dialogOpen || _checking) return;
+    debugPrint('[UpdateChecker] checkForUpdate called. kIsWeb=$kIsWeb, _dialogOpen=$_dialogOpen, _checking=$_checking, showResult=$showResult');
+    if (kIsWeb) {
+      debugPrint('[UpdateChecker] Early return — running on web.');
+      return;
+    }
+    // A manual check (showResult: true, e.g. from a dashboard button) always
+    // runs — it should never be silently swallowed just because a previous
+    // automatic check left _dialogOpen/_checking stuck true (e.g. the app
+    // was backgrounded while a dialog was open, or a hot reload happened
+    // mid-check). Only automatic checks (app start / resume) skip while one
+    // is already in progress, to avoid stacking duplicate dialogs.
+    if (!showResult && (_dialogOpen || _checking)) {
+      debugPrint('[UpdateChecker] Early return — automatic check skipped, already checking/dialog open.');
+      return;
+    }
+    if (showResult && (_dialogOpen || _checking)) {
+      debugPrint('[UpdateChecker] Manual check proceeding despite _dialogOpen/_checking being stuck true — resetting stale flags.');
+    }
+    _dialogOpen = false;
     _checking = true;
+    // Immediate visible feedback for a manual check — a release build has
+    // no visible debugPrint output, so without this the button appears to
+    // "do nothing" for the whole duration of the network call (up to the
+    // 8-second timeout below), or forever if AppUpdateChecker.of(context)
+    // ever returned null at the call site. This confirms to the user that
+    // the tap was registered and a check is actually in progress.
+    if (showResult) _snack('Checking for updates…');
     try {
       final info = await PackageInfo.fromPlatform();
       final currentVersion = info.version; // e.g. "1.4.2"
+      debugPrint('[UpdateChecker] Installed app version: $currentVersion');
 
       final res = await http
           .get(Uri.parse(kVersionCheckUrl))
           .timeout(const Duration(seconds: 8));
+      debugPrint('[UpdateChecker] version.json fetch status: ${res.statusCode}');
       if (res.statusCode != 200) {
+        debugPrint('[UpdateChecker] Non-200 response, aborting.');
         if (showResult) _snack('Update check failed. Please try again.');
         return;
       }
@@ -157,7 +197,11 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
                   : Platform.isLinux
                       ? 'linux'
                       : '';
-      if (platformKey.isEmpty || data[platformKey] == null) return;
+      debugPrint('[UpdateChecker] Detected platformKey: "$platformKey"');
+      if (platformKey.isEmpty || data[platformKey] == null) {
+        debugPrint('[UpdateChecker] No data for this platform in version.json, aborting.');
+        return;
+      }
 
       final platformData = data[platformKey] as Map<String, dynamic>;
       final String latestVersion = platformData['latest_version'] ?? '';
@@ -165,9 +209,15 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
       final String notes = platformData['notes'] ?? '';
       final bool forceUpdate = platformData['force_update'] == true;
 
-      if (latestVersion.isEmpty || downloadUrl.isEmpty) return;
+      debugPrint('[UpdateChecker] latestVersion="$latestVersion", downloadUrl="$downloadUrl"');
+      if (latestVersion.isEmpty || downloadUrl.isEmpty) {
+        debugPrint('[UpdateChecker] Missing latest_version or download_url in version.json, aborting.');
+        return;
+      }
 
-      if (_isNewer(latestVersion, currentVersion)) {
+      final bool isNewer = _isNewer(latestVersion, currentVersion);
+      debugPrint('[UpdateChecker] Is $latestVersion newer than $currentVersion? $isNewer');
+      if (isNewer) {
         if (!mounted) return;
         _showUpdateDialog(
           latestVersion: latestVersion,
@@ -178,7 +228,9 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
       } else if (showResult) {
         _snack('You are already on the latest version ($currentVersion).');
       }
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[UpdateChecker] EXCEPTION: $e');
+      debugPrint('[UpdateChecker] Stack: $st');
       if (showResult) {
         _snack('Update check failed — please check your internet connection.');
       }
@@ -189,8 +241,8 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
   }
 
   void _snack(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    appUpdateScaffoldMessengerKey.currentState
+        ?.showSnackBar(SnackBar(content: Text(msg)));
   }
 
   /// Simple semantic-version comparison, e.g. "1.4.10" vs "1.4.2".
@@ -212,9 +264,14 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
     required String notes,
     required bool forceUpdate,
   }) {
+    final dialogContext = appUpdateNavigatorKey.currentContext;
+    if (dialogContext == null) {
+      debugPrint('[UpdateChecker] Cannot show dialog — navigatorKey has no context yet.');
+      return;
+    }
     _dialogOpen = true;
     showDialog(
-      context: context,
+      context: dialogContext,
       barrierDismissible: !forceUpdate,
       builder: (ctx) => PopScope(
         canPop: !forceUpdate,
@@ -266,8 +323,13 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
     // Progress dialog — the user stays inside the app until the download
     // finishes, so the "stuck at 100% in notification tray" problem goes
     // away, because the installer opens automatically right after.
+    final progressDialogContext = appUpdateNavigatorKey.currentContext;
+    if (progressDialogContext == null) {
+      debugPrint('[UpdateChecker] Cannot show download dialog — navigatorKey has no context yet.');
+      return;
+    }
     showDialog(
-      context: context,
+      context: progressDialogContext,
       barrierDismissible: false,
       builder: (ctx) => PopScope(
         canPop: false,
@@ -327,7 +389,7 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
       );
 
       if (!closedByUser && mounted) {
-        Navigator.of(context, rootNavigator: true).pop(); // close progress dialog
+        appUpdateNavigatorKey.currentState?.pop(); // close progress dialog
       }
 
       // Download complete — open the installer/APK so the user can go
@@ -341,17 +403,17 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
         );
       }
     } on DioException catch (e) {
-      if (!closedByUser && mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
+      if (!closedByUser) {
+        appUpdateNavigatorKey.currentState?.pop();
       }
-      if (e.type != DioExceptionType.cancel && mounted) {
+      if (e.type != DioExceptionType.cancel) {
         _snack('Download failed — please check your internet connection and try again.');
       }
     } catch (e) {
-      if (!closedByUser && mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
+      if (!closedByUser) {
+        appUpdateNavigatorKey.currentState?.pop();
       }
-      if (mounted) _snack('Something went wrong: $e');
+      _snack('Something went wrong: $e');
     }
   }
 

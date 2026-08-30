@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 import 'role_selector_page.dart';
 import 'firebase_options.dart';
 import 'notification_service.dart';
+import 'school_context.dart';
 import 'app_update_checker.dart';
 
 void main() async {
@@ -17,33 +18,32 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // IndexedDB persistence off on Web — to avoid errors like "Database
-  // is closing/hidden" during hot-restart/tab-visibility changes.
-  // Normal persistence (offline cache) still runs on Mobile/desktop.
-  // This must be set before ANY Firestore query.
+  // Web par IndexedDB persistence off — hot-restart/tab-visibility ke
+  // waqt "Database is closing/hidden" jaisi errors se bachne ke liye.
+  // Mobile/desktop par normal persistence (offline cache) chalta rehta hai.
+  // Ye Firestore ki KISI BHI query se pehle set hona zaroori hai.
   if (kIsWeb) {
     FirebaseFirestore.instance.settings = const Settings(
       persistenceEnabled: false,
     );
   }
 
-  // So FCM notifications are handled even when the app is
-  // backgrounded/terminated, the background handler must be
-  // registered here.
+  // App background/terminated ho tab bhi FCM notification handle ho sake,
+  // is liye background handler yahan register karna zaroori hai.
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  // NOTE: Pre-login branding auto-load has been intentionally removed.
-  // The Role Selector always shows the generic app name/logo
-  // (see lib/app_branding.dart) until an actual login happens. The
-  // Admin Login screen separately shows the LAST logged-in school's
-  // own logo, cached locally — see SchoolContext.loadLastKnownLogo()
-  // and lib/login_page.dart.
+  // Login se pehle hi (Role Selector/Login screen ke liye) school ka
+  // apna naam/logo load karne ki koshish karte hain — dekhein
+  // SchoolContext.loadPreLoginBranding(). Ye sirf ek best-effort cache
+  // hai, is liye await nahi karte — jab bhi mil jaye, SchoolLogo/
+  // SchoolNameText widgets khud-b-khud update ho jate hain.
+  SchoolContext.loadPreLoginBranding();
 
-  // Control the window size for Windows/macOS/Linux (desktop). Web
-  // doesn't support window_manager at all, and Android/iOS don't have
-  // a native implementation for it either — so the check must be
-  // specific to an actual desktop OS, otherwise a
-  // MissingPluginException occurs.
+  // Windows/macOS/Linux (desktop) ke liye window ka size control karte
+  // hain. Web par window_manager support hi nahi karta, aur Android/iOS
+  // par bhi iska native implementation exist nahi karta — is liye check
+  // sirf actual desktop OS ke liye specific hona chahiye, warna
+  // MissingPluginException aata hai.
   if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
     await windowManager.ensureInitialized();
 
@@ -75,14 +75,14 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.teal,
         useMaterial3: true,
-        // In many places throughout the app, only the AppBar's
-        // backgroundColor is set (not the title/icon color) — in
-        // Material 3, AppBar's default text/icon color comes from the
-        // theme's colorScheme, which (with a teal seed) is dark/black.
-        // On a dark background (teal/indigo/purple, etc.) that text/icon
-        // looked almost invisible (black-on-dark) — this makes every
-        // AppBar's title and action icons white throughout the app,
-        // unless a page explicitly sets some other color itself.
+        // App bhar mein kaafi jagah AppBar ka sirf backgroundColor set kiya
+        // gaya hai (title/icon color nahi) — Material 3 mein AppBar ka
+        // default text/icon color theme ke colorScheme se aata hai jo
+        // (teal seed ke sath) dark/black hota hai. Dark background
+        // (teal/indigo/purple waghera) ke upar wo text/icon ghayab jaisa
+        // (black-on-dark) nazar aata tha — is se poori app mein har AppBar
+        // ka title aur action icons hamesha white honge, jab tak koi page
+        // khud explicitly kuch aur color na de.
         appBarTheme: AppBarTheme(
           backgroundColor: Colors.teal[800],
           foregroundColor: Colors.white,
@@ -97,25 +97,26 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      // Whenever the app is (cold) opened, the Role Selector should
-      // always be shown first — even if Firebase Auth already has a
-      // persisted session (of any role, admin/teacher/parent). This
-      // used to have an authStateChanges StreamBuilder that sent the
-      // user straight to that role's dashboard as soon as an old
-      // session was found — that's why sometimes a parent, sometimes
-      // an admin, sometimes a teacher dashboard would open directly
-      // without showing the Role Selector. Now, on every cold start, the
-      // old session is signed out first, so the Role Selector is always,
-      // every time, the very first screen. (Each role's own login page
-      // — LoginPage/TeacherLoginPage/ParentLoginPage — navigates
-      // straight to the correct dashboard itself after login, so
-      // _RoleRouter/authStateChanges is no longer needed here.)
-      // AppUpdateChecker is now in `builder:` (previously it was in
-      // `home:`) — this makes it an ancestor of the whole app (every
-      // route/dashboard under the Navigator), so a manual "Check for
-      // Update" button can also be added in the Admin/Parent/Teacher/
-      // Staff dashboards via
-      // AppUpdateChecker.of(context)?.checkForUpdate(showResult: true).
+      // App jab bhi (cold) open ho, hamesha sab se pehle Role Selector
+      // hi dikhana hai — chahe Firebase Auth ke paas pehle se koi
+      // persisted session ho (admin/teacher/parent, kisi ka bhi). Pehle
+      // yahan authStateChanges StreamBuilder tha jo purani session
+      // milte hi seedha us role ke dashboard par bhej deta tha — isi
+      // wajah se kabhi parent, kabhi admin, kabhi teacher dashboard
+      // bina Role Selector dikhaye seedha khul jata tha. Ab hum har
+      // cold start par pehle purani session ko sign out kar dete hain,
+      // taake Role Selector hamesha, har waqt, sab se pehli screen ho.
+      // (Har role ka apna login page — LoginPage/TeacherLoginPage/
+      // ParentLoginPage — login hone ke baad khud seedha sahi dashboard
+      // par navigate kar deta hai, is liye yahan _RoleRouter/
+      // authStateChanges ki zaroorat nahi rahi.)
+      // AppUpdateChecker ab `builder:` mein hai (pehle `home:` mein tha) —
+      // is se ye poori app (Navigator ke har route/dashboard) ka ancestor
+      // ban jata hai, taake Admin/Parent/Teacher/Staff dashboards mein bhi
+      // AppUpdateChecker.of(context)?.checkForUpdate(showResult: true) se
+      // manual "Check for Update" button lagaya ja sake.
+      navigatorKey: appUpdateNavigatorKey,
+      scaffoldMessengerKey: appUpdateScaffoldMessengerKey,
       builder: (context, child) =>
           AppUpdateChecker(child: child ?? const SizedBox.shrink()),
       home: const _SignOutThenRoleSelector(),
@@ -124,11 +125,11 @@ class MyApp extends StatelessWidget {
 }
 
 
-/// As soon as the app cold-opens (if Firebase Auth has an old session
-/// — of any role, admin/teacher/parent), signs it out and always shows
-/// the Role Selector. This guarantees that the very first screen when
-/// the app opens is always "select role", never straight to some
-/// dashboard.
+/// App cold-open hote hi (agar Firebase Auth ke paas koi purani session
+/// hai — kisi bhi role/admin/teacher/parent ki) usay sign out karke,
+/// hamesha Role Selector dikhata hai. Isi se guarantee hoti hai ke app
+/// khulte hi sab se pehli screen "select role" wali hi ho, kabhi seedha
+/// kisi dashboard par nahi jaye.
 class _SignOutThenRoleSelector extends StatefulWidget {
   const _SignOutThenRoleSelector();
 

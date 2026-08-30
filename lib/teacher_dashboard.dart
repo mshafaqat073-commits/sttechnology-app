@@ -129,8 +129,23 @@ class TeacherDashboard extends StatelessWidget {
             onSelected: (value) {
               switch (value) {
                 case 'update':
-                  AppUpdateChecker.of(context)
-                      ?.checkForUpdate(showResult: true);
+                  final updateChecker = AppUpdateChecker.of(context);
+                  debugPrint('[UpdateButton] AppUpdateChecker.of(context) is ${updateChecker == null ? "NULL (ancestor not found!)" : "found OK"}');
+                  if (updateChecker == null) {
+                    // Without this, a null ancestor meant the button tap
+                    // silently did nothing — no dialog, no snackbar, no
+                    // error. Fall back to a local ScaffoldMessenger so the
+                    // user always gets some feedback from the tap.
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Update checker is not ready yet — please try again in a moment.',
+                        ),
+                      ),
+                    );
+                  } else {
+                    updateChecker.checkForUpdate(showResult: true);
+                  }
                   break;
                 case 'pin':
                   _changePin(context);

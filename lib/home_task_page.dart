@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'notification_helper.dart';
 import 'school_context.dart';
+import 'student_issue_page.dart';
 
 class HomeTaskPage extends StatefulWidget {
   const HomeTaskPage({super.key});
@@ -728,7 +729,7 @@ class _HomeTaskPageState extends State<HomeTaskPage>
 
           // Niche Edit / Update / Delete Button
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
             width: double.infinity,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
@@ -747,6 +748,13 @@ class _HomeTaskPageState extends State<HomeTaskPage>
                     fontWeight: FontWeight.bold),
               ),
             ),
+          ),
+          // Send a private message (with optional photo) to ONE student's
+          // parent only — not the whole class/section.
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+            width: double.infinity,
+            child: const ReportStudentIssueButton(),
           ),
         ],
       )),

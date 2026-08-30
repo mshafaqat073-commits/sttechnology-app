@@ -373,7 +373,7 @@ class _ClassDocumentsTabState extends State<_ClassDocumentsTab> {
                     ? _selectedClass
                     : null,
                 decoration: const InputDecoration(
-                  labelText: "Select Class (sab sections)",
+                  labelText: "Select Class (all sections)",
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.groups),
                 ),
@@ -392,14 +392,15 @@ class _ClassDocumentsTabState extends State<_ClassDocumentsTab> {
               ownerType: 'class',
               ownerId: _selectedClass!,
               ownerName: "Class: $_selectedClass",
-              headerSubtitle: "Sab students/parents (sab sections) ko dikhega",
+              headerSubtitle:
+                  "Visible to all students/parents (all sections)",
             ),
           )
         else
           const Expanded(
             child: Center(
               child: Text(
-                "Pehle koi class select karein document/paper bhejne ke liye.",
+                "Please select a class first to send a document/paper.",
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey),
               ),
@@ -509,7 +510,7 @@ class _DocumentListPanelState extends State<_DocumentListPanel> {
                 controlAffinity: ListTileControlAffinity.leading,
                 title: const Text("Mark as Important",
                     style: TextStyle(fontSize: 14)),
-                subtitle: const Text("Parents ko sab se upar dikhega",
+                subtitle: const Text("Shown at the top of the parent's list",
                     style: TextStyle(fontSize: 12)),
                 onChanged: (v) =>
                     setDialogState(() => markImportant = v ?? false),

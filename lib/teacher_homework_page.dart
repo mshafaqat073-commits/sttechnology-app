@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'notification_helper.dart';
 import 'school_context.dart';
+import 'student_issue_page.dart';
 
 // The teacher-side Diary / Homework / Special Message page.
 // The only difference from the admin-side HomeTaskPage is that the
@@ -760,7 +761,7 @@ class _TeacherHomeworkPageState extends State<TeacherHomeworkPage>
 
                 // Button below to edit/delete entries this teacher has posted
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
@@ -778,6 +779,16 @@ class _TeacherHomeworkPageState extends State<TeacherHomeworkPage>
                           fontSize: 16,
                           fontWeight: FontWeight.bold),
                     ),
+                  ),
+                ),
+                // Send a private message (with optional photo) to ONE
+                // student's parent only — not the whole class/section.
+                Container(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+                  width: double.infinity,
+                  child: ReportStudentIssueButton(
+                    assignedClasses: widget.assignedClasses,
+                    postedByName: widget.teacherName,
                   ),
                 ),
               ],

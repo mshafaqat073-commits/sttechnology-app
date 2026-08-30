@@ -46,19 +46,22 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        centerTitle: true,
-        leadingWidth: 56,
-        leading: const Padding(
-          padding: EdgeInsets.only(left: 12),
-          child: SizedBox(
-            height: 32,
-            width: 32,
-            child: SchoolLogo(fit: BoxFit.contain),
-          ),
-        ),
-        title: const Text(
-          "Dashboard",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              height: 32,
+              width: 32,
+              child: SchoolLogo(fit: BoxFit.contain),
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: SchoolNameText(
+                suffix: " Dashboard",
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
         ),
         backgroundColor: Colors.teal[800],
         actions: [
@@ -95,8 +98,23 @@ class _DashboardPageState extends State<DashboardPage> {
                   );
                   break;
                 case 'check_update':
-                  AppUpdateChecker.of(context)
-                      ?.checkForUpdate(showResult: true);
+                  final updateChecker = AppUpdateChecker.of(context);
+                  debugPrint('[UpdateButton] AppUpdateChecker.of(context) is ${updateChecker == null ? "NULL (ancestor not found!)" : "found OK"}');
+                  if (updateChecker == null) {
+                    // Without this, a null ancestor meant the button tap
+                    // silently did nothing — no dialog, no snackbar, no
+                    // error. Fall back to a local ScaffoldMessenger so the
+                    // user always gets some feedback from the tap.
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Update checker is not ready yet — please try again in a moment.',
+                        ),
+                      ),
+                    );
+                  } else {
+                    updateChecker.checkForUpdate(showResult: true);
+                  }
                   break;
                 case 'logout':
                   // Sign out of the Firebase Auth session and clear the
@@ -237,24 +255,11 @@ class _DashboardPageState extends State<DashboardPage> {
                             schoolName = name.trim();
                           }
                         }
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 700),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                "Welcome, Admin $schoolName",
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                        );
+                        return Text("Welcome, Admin $schoolName",
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold));
                       },
                     ),
                     const SizedBox(height: 15),

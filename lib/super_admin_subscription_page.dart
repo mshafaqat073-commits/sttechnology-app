@@ -169,11 +169,15 @@ class _SuperAdminSubscriptionPageState extends State<SuperAdminSubscriptionPage>
             final daysLeft = endDate?.difference(DateTime.now()).inDays;
             final expired = endDate != null && DateTime.now().isAfter(endDate);
 
-            final Color chipColor = expired
-                ? Colors.red
-                : (daysLeft != null && daysLeft <= 7)
-                    ? Colors.orange
-                    : Colors.green;
+            final bool isDeactivated = status == 'deactivated';
+
+            final Color chipColor = isDeactivated
+                ? Colors.grey
+                : expired
+                    ? Colors.red
+                    : (daysLeft != null && daysLeft <= 7)
+                        ? Colors.orange
+                        : Colors.green;
 
             return Card(
               color: Colors.white,
@@ -185,20 +189,47 @@ class _SuperAdminSubscriptionPageState extends State<SuperAdminSubscriptionPage>
                       fontWeight: FontWeight.bold, color: Colors.black87),
                 ),
                 subtitle: Text(
-                  endDate == null
-                      ? "No subscription data yet"
-                      : "Status: $status | Ends: ${endDate.toLocal().toString().split(' ').first}"
-                          "${expired ? ' (EXPIRED)' : (daysLeft != null ? ' ($daysLeft days left)' : '')}",
+                  isDeactivated
+                      ? "Status: $status | Account deactivated by admin"
+                      : endDate == null
+                          ? "No subscription data yet"
+                          : "Status: $status | Ends: ${endDate.toLocal().toString().split(' ').first}"
+                              "${expired ? ' (EXPIRED)' : (daysLeft != null ? ' ($daysLeft days left)' : '')}",
                   style: const TextStyle(color: Colors.black54),
                 ),
                 leading: CircleAvatar(
                   backgroundColor: chipColor,
                   child: const Icon(Icons.school, color: Colors.white),
                 ),
-                trailing: ElevatedButton(
-                  onPressed: () => _extendDialog(
-                      doc.id, (data['schoolName'] as String?) ?? doc.id),
-                  child: const Text("Extend"),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () => _extendDialog(
+                          doc.id, (data['schoolName'] as String?) ?? doc.id),
+                      child: const Text("Extend"),
+                    ),
+                    const SizedBox(width: 4),
+                    // Small icon-only action next to Extend for blocking or
+                    // restoring a school's access, independent of how much
+                    // subscription time is left.
+                    IconButton(
+                      tooltip: isDeactivated
+                          ? "Reactivate account"
+                          : "Deactivate account",
+                      icon: Icon(
+                        isDeactivated
+                            ? Icons.check_circle_outline
+                            : Icons.block,
+                        color: isDeactivated ? Colors.green : Colors.red,
+                      ),
+                      onPressed: () => _toggleAccountActive(
+                        doc.id,
+                        (data['schoolName'] as String?) ?? doc.id,
+                        isDeactivated,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );
@@ -396,6 +427,62 @@ class _SuperAdminSubscriptionPageState extends State<SuperAdminSubscriptionPage>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("$schoolName extended by $result days.")),
+      );
+    }
+  }
+
+  // Deactivates or reactivates a school's account, independent of its
+  // subscription end date. Used by the small icon next to "Extend" in the
+  // Schools tab. Deactivating blocks the school from accessing the app
+  // even if their subscription is still valid; reactivating restores
+  // access as 'active' so the normal expiry checks resume.
+  Future<void> _toggleAccountActive(
+      String schoolId, String schoolName, bool isDeactivated) async {
+    final String action = isDeactivated ? "Reactivate" : "Deactivate";
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text("$action $schoolName?",
+            style: const TextStyle(color: Colors.black87)),
+        content: Text(
+          isDeactivated
+              ? "This will restore the school's access to the app."
+              : "This will block the school from accessing the app, "
+                  "even if their subscription is still valid.",
+          style: const TextStyle(color: Colors.black87),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: isDeactivated ? Colors.green : Colors.red),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .update({
+      'subscriptionStatus': isDeactivated ? 'active' : 'deactivated',
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isDeactivated
+              ? "$schoolName reactivated."
+              : "$schoolName deactivated."),
+          backgroundColor: isDeactivated ? Colors.green : Colors.red,
+        ),
       );
     }
   }
