@@ -24,7 +24,6 @@ import 'change_pin_dialog.dart';
 import 'parent_performance_page.dart';
 import 'performance_bar_chart.dart';
 import 'app_update_checker.dart';
-import 'parent_home_task_page.dart';
 
 /// This dashboard opens after Parent login — every student (sibling)
 /// linked to that phone number is listed here.

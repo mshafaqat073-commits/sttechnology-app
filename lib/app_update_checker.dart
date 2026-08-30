@@ -10,6 +10,21 @@
 // Does nothing on web — web always serves the latest deploy from
 // Netlify.
 //
+// UPDATED BEHAVIOUR:
+// - An automatic check (on app start / on resume) only pops the
+//   "Update Available" dialog once per release, then stays quiet for
+//   kUpdatePromptCooldown (currently 6 hours) if the user tapped
+//   "Later" — instead of showing it again on every single resume.
+// - A manual check (the "Check for Update" button, showResult: true)
+//   always shows the result immediately, ignoring that cooldown.
+// - force_update releases always show, ignoring the cooldown too.
+// - Once the installed version actually catches up to the published
+//   one, the stored cooldown record is cleared automatically, so the
+//   *next* release starts its own fresh cooldown.
+// - Uses shared_preferences (already a dependency in this project —
+//   see login_page.dart / pay_fee_page.dart) to remember what was
+//   last prompted and when.
+//
 // ==========================================================================
 // SETUP (do this first, or the build will fail)
 // ==========================================================================
@@ -78,10 +93,23 @@ import 'package:http/http.dart' as http;
 import 'package:open_file/open_file.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// URL of the version.json file hosted on Netlify.
 const String kVersionCheckUrl =
     'https://sttechnology.netlify.app/version.json';
+
+/// How long to wait before re-showing the "Update Available" dialog to a
+/// user who already saw it for the current latest version and chose
+/// "Later". Without this, an automatic check on every app start/resume
+/// would pop the same dialog up again and again. Ignored for
+/// force_update releases, which must always be shown.
+const Duration kUpdatePromptCooldown = Duration(hours: 6);
+
+/// SharedPreferences keys used to remember what was last shown, so the
+/// dialog doesn't repeat on every launch/resume.
+const String kPrefLastPromptedVersion = 'app_update_last_prompted_version';
+const String kPrefLastPromptedAtMs = 'app_update_last_prompted_at_ms';
 
 /// Attach these to MaterialApp (navigatorKey / scaffoldMessengerKey) in
 /// main.dart. AppUpdateChecker lives ABOVE the Navigator (it wraps
@@ -219,14 +247,38 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
       debugPrint('[UpdateChecker] Is $latestVersion newer than $currentVersion? $isNewer');
       if (isNewer) {
         if (!mounted) return;
+
+        // A manual check (showResult: true) or a forced update always shows
+        // the dialog. An automatic check (app start/resume) only shows it
+        // again if we haven't already prompted for this exact version
+        // recently — otherwise a "Later" tap would just make the dialog
+        // reappear every time the app is opened/resumed instead of leaving
+        // the user alone for a while.
+        final bool shouldShow = showResult ||
+            forceUpdate ||
+            await _shouldPromptAutomatically(latestVersion);
+        if (!shouldShow) {
+          debugPrint('[UpdateChecker] Skipping dialog — already prompted for '
+              '$latestVersion within the last ${kUpdatePromptCooldown.inHours}h.');
+          return;
+        }
+
+        await _rememberPrompted(latestVersion);
+        if (!mounted) return;
         _showUpdateDialog(
           latestVersion: latestVersion,
           downloadUrl: downloadUrl,
           notes: notes,
           forceUpdate: forceUpdate,
         );
-      } else if (showResult) {
-        _snack('You are already on the latest version ($currentVersion).');
+      } else {
+        // Not newer — either already updated or nothing published yet.
+        // Clear any stale "last prompted" record so a future real update
+        // starts its own fresh cooldown instead of inheriting an old one.
+        await _clearPromptedRecord();
+        if (showResult) {
+          _snack('You are already on the latest version ($currentVersion) — updated.');
+        }
       }
     } catch (e, st) {
       debugPrint('[UpdateChecker] EXCEPTION: $e');
@@ -243,6 +295,43 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
   void _snack(String msg) {
     appUpdateScaffoldMessengerKey.currentState
         ?.showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  /// True if an automatic check should still pop the dialog for
+  /// [latestVersion] — i.e. either we've never prompted for this version
+  /// before, or we did but the cooldown window has since passed.
+  Future<bool> _shouldPromptAutomatically(String latestVersion) async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastVersion = prefs.getString(kPrefLastPromptedVersion);
+    final lastAtMs = prefs.getInt(kPrefLastPromptedAtMs);
+
+    if (lastVersion != latestVersion || lastAtMs == null) {
+      // Either a newer release than the one we last prompted for, or we've
+      // never prompted at all — always show it.
+      return true;
+    }
+
+    final lastAt = DateTime.fromMillisecondsSinceEpoch(lastAtMs);
+    final elapsed = DateTime.now().difference(lastAt);
+    return elapsed >= kUpdatePromptCooldown;
+  }
+
+  /// Records that we just prompted the user for [latestVersion] right now,
+  /// so the cooldown in [_shouldPromptAutomatically] has something to
+  /// measure against.
+  Future<void> _rememberPrompted(String latestVersion) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(kPrefLastPromptedVersion, latestVersion);
+    await prefs.setInt(
+        kPrefLastPromptedAtMs, DateTime.now().millisecondsSinceEpoch);
+  }
+
+  /// Clears the "last prompted" record — called once the installed version
+  /// catches up, so a future release doesn't inherit an old cooldown.
+  Future<void> _clearPromptedRecord() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(kPrefLastPromptedVersion);
+    await prefs.remove(kPrefLastPromptedAtMs);
   }
 
   /// Simple semantic-version comparison, e.g. "1.4.10" vs "1.4.2".

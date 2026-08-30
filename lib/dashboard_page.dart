@@ -46,23 +46,22 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(
-              height: 32,
-              width: 32,
-              child: SchoolLogo(fit: BoxFit.contain),
-            ),
-            const SizedBox(width: 10),
-            Flexible(
-              child: SchoolNameText(
-                suffix: " Dashboard",
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
+        // Logo stays on the side (as the leading icon), "Dashboard" is
+        // centered at the top, and the school name is no longer shown in
+        // the app bar (it used to wrap awkwardly onto a second line here on
+        // narrower screens). centerTitle is set explicitly so this looks
+        // the same on desktop, web, and Android instead of following each
+        // platform's own default alignment.
+        leadingWidth: 56,
+        leading: const Padding(
+          padding: EdgeInsets.all(8),
+          child: SchoolLogo(fit: BoxFit.contain),
         ),
+        title: const Text(
+          'Dashboard',
+          style: TextStyle(color: Colors.white),
+        ),
+        centerTitle: true,
         backgroundColor: Colors.teal[800],
         actions: [
           // All account/dashboard actions live under a single menu button,
