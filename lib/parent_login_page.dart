@@ -65,6 +65,19 @@ class _ParentLoginPageState extends State<ParentLoginPage> {
       matchedChildren = matchedChildren
           .where((d) => schoolIdFromDoc(d.reference) == firstSchoolId)
           .toList();
+
+      // A deactivated school (blocked by the developer/Super Admin) must
+      // not be able to log in at all, even with a correct Login ID+PIN
+      // and even if its subscription hasn't expired yet.
+      if (await isSchoolDeactivated(firstSchoolId)) {
+        setState(() {
+          _errorMessage =
+              "This school's account has been deactivated. Please contact the school/developer.";
+          _isLoading = false;
+        });
+        return;
+      }
+
       SchoolContext.set(firstSchoolId);
       await SchoolContext.loadBranding();
 

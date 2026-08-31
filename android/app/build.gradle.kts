@@ -22,7 +22,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.my_test_app"
+    namespace = "com.sttechnology.schoolmanagement"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -39,7 +39,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.my_test_app"
+        applicationId = "com.sttechnology.schoolmanagement"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutter.versionCode

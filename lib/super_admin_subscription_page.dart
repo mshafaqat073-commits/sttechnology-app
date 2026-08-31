@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'subscription_service.dart';
 import 'subscription_payment_page.dart' show kSubscriptionRequestsCollection;
+import 'admin_auth.dart' show adminEmailForUsername;
 
 /// Roadmap step 7: "You Confirm in Super Admin Panel".
 ///
@@ -102,6 +105,17 @@ class _SuperAdminSubscriptionPageState extends State<SuperAdminSubscriptionPage>
       appBar: AppBar(
         title: const Text("Schools — Subscriptions"),
         backgroundColor: Colors.deepPurple,
+        actions: [
+          // Lets the developer/owner create a brand new school account
+          // (Firebase Auth login + schools/{id} doc) directly from this
+          // panel, instead of needing to do it manually in the Firebase
+          // Console every time a new school signs up.
+          IconButton(
+            tooltip: "Create New School Account",
+            icon: const Icon(Icons.add_business),
+            onPressed: _createSchoolDialog,
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           // Both selected and unselected tab labels stay fully white,
@@ -736,6 +750,268 @@ class _SuperAdminSubscriptionPageState extends State<SuperAdminSubscriptionPage>
         ),
       );
     }
+  }
+
+  // Shows the "Create New School Account" form (School Name + Admin
+  // Username/Password) and creates everything needed for that school to
+  // log in immediately: a Firebase Auth account for the admin, the
+  // schools/{schoolId} document (started on a 30-day trial, same as an
+  // existing school's first login would auto-create), the
+  // schools/{schoolId}/users/{uid} login-lookup doc, and a blank
+  // settings/global doc.
+  Future<void> _createSchoolDialog() async {
+    final schoolNameController = TextEditingController();
+    final usernameController = TextEditingController();
+    final passwordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    bool obscurePassword = true;
+    bool obscureConfirm = true;
+    bool isSaving = false;
+    String? errorText;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text("Create New School Account",
+              style: TextStyle(color: Colors.black87)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: schoolNameController,
+                  enabled: !isSaving,
+                  decoration:
+                      const InputDecoration(labelText: "School Name"),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: usernameController,
+                  enabled: !isSaving,
+                  decoration: const InputDecoration(
+                    labelText: "Admin Username",
+                    helperText: "This is what the school logs in with",
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: passwordController,
+                  obscureText: obscurePassword,
+                  enabled: !isSaving,
+                  decoration: InputDecoration(
+                    labelText: "Admin Password",
+                    suffixIcon: IconButton(
+                      icon: Icon(obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                      onPressed: () => setDialogState(
+                          () => obscurePassword = !obscurePassword),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: confirmPasswordController,
+                  obscureText: obscureConfirm,
+                  enabled: !isSaving,
+                  decoration: InputDecoration(
+                    labelText: "Confirm Password",
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureConfirm
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                      onPressed: () => setDialogState(
+                          () => obscureConfirm = !obscureConfirm),
+                    ),
+                  ),
+                ),
+                if (errorText != null) ...[
+                  const SizedBox(height: 10),
+                  Text(errorText!, style: const TextStyle(color: Colors.red)),
+                ],
+                if (isSaving) ...[
+                  const SizedBox(height: 14),
+                  const CircularProgressIndicator(),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed:
+                  isSaving ? null : () => Navigator.pop(dialogContext),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      final schoolName = schoolNameController.text.trim();
+                      final username = usernameController.text.trim();
+                      final password = passwordController.text;
+                      final confirmPassword =
+                          confirmPasswordController.text;
+
+                      if (schoolName.isEmpty ||
+                          username.isEmpty ||
+                          password.isEmpty) {
+                        setDialogState(
+                            () => errorText = "All fields are required.");
+                        return;
+                      }
+                      if (password.length < 6) {
+                        setDialogState(() => errorText =
+                            "Password must be at least 6 characters.");
+                        return;
+                      }
+                      if (password != confirmPassword) {
+                        setDialogState(() =>
+                            errorText = "Passwords do not match.");
+                        return;
+                      }
+
+                      setDialogState(() {
+                        isSaving = true;
+                        errorText = null;
+                      });
+
+                      try {
+                        final schoolId = await _createSchoolAccount(
+                          schoolName: schoolName,
+                          username: username,
+                          password: password,
+                        );
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  "$schoolName created (School ID: $schoolId). "
+                                  "Share the username \"$username\" and password with them."),
+                              backgroundColor: Colors.green,
+                              duration: const Duration(seconds: 8),
+                            ),
+                          );
+                        }
+                      } on FirebaseAuthException catch (e) {
+                        setDialogState(() {
+                          isSaving = false;
+                          errorText = e.code == 'email-already-in-use'
+                              ? "That username is already taken — choose another."
+                              : e.code == 'weak-password'
+                                  ? "That password is too weak — choose another."
+                                  : (e.message ?? "Could not create the account.");
+                        });
+                      } catch (e) {
+                        setDialogState(() {
+                          isSaving = false;
+                          errorText = "Something went wrong: $e";
+                        });
+                      }
+                    },
+              child: const Text("Create"),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    schoolNameController.dispose();
+    usernameController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+  }
+
+  // Creates the admin's Firebase Auth account plus the three Firestore
+  // documents a school needs to exist and log in. Returns the new
+  // schoolId.
+  //
+  // IMPORTANT: createUserWithEmailAndPassword() automatically signs in
+  // as the newly created user on whichever FirebaseAuth instance it's
+  // called on. Calling it on FirebaseAuth.instance directly would sign
+  // the Super Admin OUT of their own session on this device. To avoid
+  // that, the new admin account is created on a separate, temporary
+  // secondary Firebase app instance, which is deleted right afterwards —
+  // the Super Admin's own session is never touched.
+  Future<String> _createSchoolAccount({
+    required String schoolName,
+    required String username,
+    required String password,
+  }) async {
+    final schoolsRef = FirebaseFirestore.instance.collection('schools');
+
+    // Build a readable, unique schoolId from the school name (e.g.
+    // "City Grammar School" -> "city_grammar_school"), appending a
+    // number if that slug is already taken.
+    String baseSlug = schoolName
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
+    if (baseSlug.isEmpty) baseSlug = 'school';
+    String schoolId = baseSlug;
+    int suffix = 1;
+    while ((await schoolsRef.doc(schoolId).get()).exists) {
+      suffix++;
+      schoolId = '${baseSlug}_$suffix';
+    }
+
+    final tempApp = await Firebase.initializeApp(
+      name: 'create_school_${DateTime.now().millisecondsSinceEpoch}',
+      options: Firebase.app().options,
+    );
+    final String authEmail = adminEmailForUsername(username);
+    String uid;
+    try {
+      final tempAuth = FirebaseAuth.instanceFor(app: tempApp);
+      final cred = await tempAuth.createUserWithEmailAndPassword(
+        email: authEmail,
+        password: password,
+      );
+      final user = cred.user;
+      if (user == null) {
+        throw StateError("Account creation failed — no user returned.");
+      }
+      uid = user.uid;
+      await tempAuth.signOut();
+    } finally {
+      await tempApp.delete();
+    }
+
+    // Same 30-day trial a first-ever login would auto-create in
+    // SubscriptionInfo.fetch() — see subscription_service.dart.
+    final trialEnd = DateTime.now().add(const Duration(days: 30));
+
+    final batch = FirebaseFirestore.instance.batch();
+    batch.set(schoolsRef.doc(schoolId), {
+      'schoolName': schoolName,
+      'subscriptionStatus': 'trial',
+      'subscriptionEndDate': Timestamp.fromDate(trialEnd),
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    batch.set(
+      schoolsRef.doc(schoolId).collection('users').doc(uid),
+      {
+        'username': username,
+        'authEmail': authEmail,
+        'authUid': uid,
+        'role': 'admin',
+        'createdAt': FieldValue.serverTimestamp(),
+      },
+    );
+    batch.set(
+      schoolsRef.doc(schoolId).collection('settings').doc('global'),
+      {'schoolName': schoolName},
+      SetOptions(merge: true),
+    );
+    await batch.commit();
+
+    return schoolId;
   }
 
   void _tryUnlock() {

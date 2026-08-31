@@ -300,9 +300,22 @@ class _LoginPageState extends State<LoginPage> {
         password: typedPassword,
       );
 
+      // 2b. Username+password were correct, but this school's account
+      // may have been deactivated by the developer/Super Admin (see
+      // SuperAdminSubscriptionPage) — that block must apply regardless
+      // of whether the subscription itself has expired yet. Sign back
+      // out immediately so no session is left behind.
+      final schoolId = schoolIdFromDoc(userDoc.reference);
+      if (await isSchoolDeactivated(schoolId)) {
+        await FirebaseAuth.instance.signOut();
+        _showError(
+            "This account has been deactivated. Please contact the developer/admin.");
+        return;
+      }
+
       // 3. Find out which school this doc belongs to, and set it as
       // the active school for the whole app.
-      SchoolContext.set(schoolIdFromDoc(userDoc.reference));
+      SchoolContext.set(schoolId);
       // Cache the school's name/logo (from Settings > School Name/Logo)
       // so the Dashboard and PDFs immediately show the correct branding.
       await SchoolContext.loadBranding();

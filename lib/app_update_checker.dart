@@ -89,6 +89,7 @@ import 'dart:io' show Directory, File, Platform;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:http/http.dart' as http;
 import 'package:open_file/open_file.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -110,6 +111,43 @@ const Duration kUpdatePromptCooldown = Duration(hours: 6);
 /// dialog doesn't repeat on every launch/resume.
 const String kPrefLastPromptedVersion = 'app_update_last_prompted_version';
 const String kPrefLastPromptedAtMs = 'app_update_last_prompted_at_ms';
+
+/// Remembers which version's installer was already downloaded and
+/// launched. The running app process still reports the OLD version
+/// (PackageInfo) until it is actually closed and reopened after the
+/// install finishes — so without this, pressing "Update" again in that
+/// window would start the whole download over, even though the update
+/// has already been installed/launched. See the check in
+/// checkForUpdate() below.
+const String kPrefLastInstallLaunchedVersion =
+    'app_update_last_install_launched_version';
+const String kPrefLastInstallLaunchedAtMs =
+    'app_update_last_install_launched_at_ms';
+
+/// How long the "installer for this version was already launched" skip
+/// lasts. Android's installer sometimes fails silently (e.g. "conflicts
+/// with an existing package" when a release APK is signed with a
+/// different key than what's currently installed) — if that happens,
+/// PackageInfo will NEVER catch up to latestVersion, so this record must
+/// not block re-downloading forever. After this window, a repeat "Update"
+/// tap is treated as a genuine retry instead of an accidental double-tap.
+const Duration kInstallLaunchedGracePeriod = Duration(minutes: 3);
+
+/// Tracks how many times the installer has been launched for the SAME
+/// [latestVersion] in a row. Android enforces signature matching at the
+/// OS level — no app code (ours or anyone else's) can make it accept an
+/// install over a differently-signed existing package; that decision
+/// happens outside the app entirely. But if the SAME version's installer
+/// keeps being launched attempt after attempt without PackageInfo ever
+/// catching up, that's a strong signal the install is failing every time
+/// (most often "conflicts with an existing package" — a leftover copy
+/// signed with a different key, e.g. a debug build, or a cloned/"Dual
+/// Apps" copy some phones keep in a hidden second profile). After
+/// kInstallConflictHelpThreshold attempts, checkForUpdate() shows
+/// targeted troubleshooting instead of just re-opening the same dialog.
+const String kPrefInstallAttemptVersion = 'app_update_install_attempt_version';
+const String kPrefInstallAttemptCount = 'app_update_install_attempt_count';
+const int kInstallConflictHelpThreshold = 2;
 
 /// Attach these to MaterialApp (navigatorKey / scaffoldMessengerKey) in
 /// main.dart. AppUpdateChecker lives ABOVE the Navigator (it wraps
@@ -167,6 +205,14 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
     if (state == AppLifecycleState.resumed && !kIsWeb) {
       checkForUpdate();
     }
+  }
+
+  /// Installed app version (e.g. "1.0.0") — for showing in Settings/About
+  /// next to a "Check for Update" button. Safe to call anytime; on web it
+  /// still returns PackageInfo's version (just not used for update checks).
+  Future<String> getInstalledVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    return info.version;
   }
 
   /// When [showResult] is true, also shows an "already up to date" /
@@ -262,6 +308,74 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
       if (isNewer) {
         if (!mounted) return;
 
+        // The installer for this exact version was already downloaded
+        // and launched in a previous check — the app just hasn't been
+        // restarted yet to pick it up, so PackageInfo still reports the
+        // old version. Don't start a fresh download for the same
+        // release; tell the user to finish installing/restart instead.
+        // BUT: only for a short grace period. If the install actually
+        // failed (e.g. Android's "conflicts with an existing package"
+        // error, which usually means this APK was signed with a
+        // different key than the one currently on the device),
+        // PackageInfo will never catch up — so after the grace period
+        // this is treated as a real retry instead of staying stuck
+        // forever telling the user "already downloaded".
+        final prefs = await SharedPreferences.getInstance();
+        final alreadyLaunchedVersion =
+            prefs.getString(kPrefLastInstallLaunchedVersion);
+        final alreadyLaunchedAtMs =
+            prefs.getInt(kPrefLastInstallLaunchedAtMs);
+        if (alreadyLaunchedVersion == latestVersion &&
+            alreadyLaunchedAtMs != null &&
+            DateTime.now().difference(
+                    DateTime.fromMillisecondsSinceEpoch(alreadyLaunchedAtMs)) <
+                kInstallLaunchedGracePeriod) {
+          debugPrint('[UpdateChecker] Installer for $latestVersion was already '
+              'launched — skipping re-download (within grace period).');
+          if (showResult) {
+            _snack('Update to $latestVersion has already been downloaded — '
+                'please finish installing it and restart the app.');
+          }
+          return;
+        }
+
+        // Same version's installer has already failed to actually take
+        // effect kInstallConflictHelpThreshold times in a row — instead
+        // of showing the same "Update Available" dialog again (which
+        // would just repeat the same failing installer), show targeted
+        // troubleshooting for the install-conflict problem.
+        final priorAttemptVersion = prefs.getString(kPrefInstallAttemptVersion);
+        final priorAttemptCount = prefs.getInt(kPrefInstallAttemptCount) ?? 0;
+        if (priorAttemptVersion == latestVersion &&
+            priorAttemptCount >= kInstallConflictHelpThreshold) {
+          final bool shouldShowHelp = showResult ||
+              forceUpdate ||
+              await _shouldPromptAutomatically(latestVersion);
+          if (shouldShowHelp) {
+            await _rememberPrompted(latestVersion);
+            if (!mounted) return;
+            // The "conflicts with an existing package" failure mode (and
+            // its fix — uninstall/check for App Clone/Dual Apps/restart)
+            // is specific to how Android enforces signing-key matching.
+            // Windows/macOS/Linux installers fail for different reasons
+            // (permissions, an installer window already open, antivirus/
+            // SmartScreen, a locked file, etc.), so they get their own
+            // troubleshooting text instead of the Android-specific one.
+            if (Platform.isAndroid) {
+              _showInstallConflictHelpDialogAndroid(
+                latestVersion: latestVersion,
+                downloadUrl: downloadUrl,
+              );
+            } else {
+              _showInstallConflictHelpDialogDesktop(
+                latestVersion: latestVersion,
+                downloadUrl: downloadUrl,
+              );
+            }
+          }
+          return;
+        }
+
         // A manual check (showResult: true) or a forced update always shows
         // the dialog. An automatic check (app start/resume) only shows it
         // again if we haven't already prompted for this exact version
@@ -287,8 +401,9 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
         );
       } else {
         // Not newer — either already updated or nothing published yet.
-        // Clear any stale "last prompted" record so a future real update
-        // starts its own fresh cooldown instead of inheriting an old one.
+        // Clear any stale "last prompted"/"last installer launched"
+        // records so a future real update starts fresh instead of
+        // inheriting old state.
         await _clearPromptedRecord();
         if (showResult) {
           _snack('You are already on the latest version ($currentVersion) — updated.');
@@ -346,6 +461,10 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(kPrefLastPromptedVersion);
     await prefs.remove(kPrefLastPromptedAtMs);
+    await prefs.remove(kPrefLastInstallLaunchedVersion);
+    await prefs.remove(kPrefLastInstallLaunchedAtMs);
+    await prefs.remove(kPrefInstallAttemptVersion);
+    await prefs.remove(kPrefInstallAttemptCount);
   }
 
   /// Simple semantic-version comparison, e.g. "1.4.10" vs "1.4.2". Also
@@ -419,11 +538,179 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
     ).then((_) => _dialogOpen = false);
   }
 
+  /// Shown instead of the plain "Update Available" dialog once the same
+  /// version's installer has been launched kInstallConflictHelpThreshold
+  /// times without the app ever actually updating. Explains WHY this
+  /// happens (Android blocks installing over a differently-signed
+  /// existing package — no app can override that, by design, for
+  /// security) and what actually fixes it, plus a manual fallback.
+  void _showInstallConflictHelpDialogAndroid({
+    required String latestVersion,
+    required String downloadUrl,
+  }) {
+    final dialogContext = appUpdateNavigatorKey.currentContext;
+    if (dialogContext == null) {
+      debugPrint('[UpdateChecker] Cannot show install-conflict dialog — navigatorKey has no context yet.');
+      return;
+    }
+    _dialogOpen = true;
+    showDialog(
+      context: dialogContext,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Installation Keeps Failing'),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'The update download keeps completing, but the install itself '
+                'is failing — usually shown as "App not installed as package '
+                'conflicts with an existing package".',
+              ),
+              SizedBox(height: 10),
+              Text(
+                'This is enforced by Android itself, not by this app: it '
+                'refuses to install an update over an existing copy that was '
+                'signed with a different key, and no app can override that. '
+                'It usually means a leftover copy of this app is still on '
+                'the phone somewhere. Please try, in order:',
+              ),
+              SizedBox(height: 10),
+              Text('1. Settings > Apps > find this app > Uninstall (if it still shows up at all).'),
+              SizedBox(height: 4),
+              Text('2. Check for an "App Clone" / "Dual Apps" / "Parallel Apps" feature in phone Settings — some phones keep a second hidden copy there that a normal uninstall does not remove. Turn that off/remove it too.'),
+              SizedBox(height: 4),
+              Text('3. Restart the phone.'),
+              SizedBox(height: 4),
+              Text('4. Then try installing again.'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _dialogOpen = false;
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Close'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: downloadUrl));
+              if (ctx.mounted) {
+                _snack('Download link copied — you can open it in a browser '
+                    'or file manager to install manually.');
+              }
+            },
+            child: const Text('Copy Download Link'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _dialogOpen = false;
+              Navigator.of(ctx).pop();
+              _downloadAndInstall(downloadUrl, latestVersion);
+            },
+            child: const Text('Try Again'),
+          ),
+        ],
+      ),
+    ).then((_) => _dialogOpen = false);
+  }
+
+  /// Desktop (Windows/macOS/Linux) equivalent of the Android install-conflict
+  /// dialog above. Desktop installers fail repeatedly for different reasons
+  /// than Android's signing-key enforcement — most commonly the installer/
+  /// app is already running (file locked), it needs admin/elevated rights,
+  /// or antivirus/SmartScreen is quarantining or blocking the download —
+  /// so this shows guidance relevant to those instead of the Android text.
+  void _showInstallConflictHelpDialogDesktop({
+    required String latestVersion,
+    required String downloadUrl,
+  }) {
+    final dialogContext = appUpdateNavigatorKey.currentContext;
+    if (dialogContext == null) {
+      debugPrint('[UpdateChecker] Cannot show install-conflict dialog — navigatorKey has no context yet.');
+      return;
+    }
+    _dialogOpen = true;
+    showDialog(
+      context: dialogContext,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Installation Keeps Failing'),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'The update download keeps completing, but the install '
+                'itself does not seem to be taking effect. Please try, in '
+                'order:',
+              ),
+              SizedBox(height: 10),
+              Text('1. Fully close the app (including from the system tray/taskbar) before installing, so the installer isn\'t trying to replace files that are still in use.'),
+              SizedBox(height: 4),
+              Text('2. Right-click the installer and choose "Run as administrator" (Windows) or approve the install when prompted (macOS/Linux).'),
+              SizedBox(height: 4),
+              Text('3. Check if antivirus/Windows SmartScreen quarantined or blocked the downloaded file, and allow it if so.'),
+              SizedBox(height: 4),
+              Text('4. Restart the computer, then try installing again.'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _dialogOpen = false;
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Close'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: downloadUrl));
+              if (ctx.mounted) {
+                _snack('Download link copied — you can open it in a browser '
+                    'or file manager to install manually.');
+              }
+            },
+            child: const Text('Copy Download Link'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _dialogOpen = false;
+              Navigator.of(ctx).pop();
+              _downloadAndInstall(downloadUrl, latestVersion);
+            },
+            child: const Text('Try Again'),
+          ),
+        ],
+      ),
+    ).then((_) => _dialogOpen = false);
+  }
+
   // ==========================================================================
   // In-app download (dio) + real progress + auto-install trigger (open_filex)
   // ==========================================================================
 
   Future<void> _downloadAndInstall(String url, String version) async {
+    // Track repeated attempts for this same version — see
+    // kPrefInstallAttemptCount above. Counted from the moment "Update"/
+    // "Try Again" is tapped, regardless of whether the install itself
+    // ends up succeeding (we have no way to know that — Android doesn't
+    // report install success/failure back to the launching app).
+    final attemptPrefs = await SharedPreferences.getInstance();
+    final priorAttemptVersion =
+        attemptPrefs.getString(kPrefInstallAttemptVersion);
+    final priorAttemptCount =
+        priorAttemptVersion == version
+            ? (attemptPrefs.getInt(kPrefInstallAttemptCount) ?? 0)
+            : 0;
+    await attemptPrefs.setString(kPrefInstallAttemptVersion, version);
+    await attemptPrefs.setInt(
+        kPrefInstallAttemptCount, priorAttemptCount + 1);
+
     final progress = ValueNotifier<double>(0); // negative = indeterminate
     final cancelToken = CancelToken();
     bool closedByUser = false;
@@ -503,7 +790,17 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
       // Download complete — open the installer/APK so the user can go
       // straight to "Install".
       final result = await OpenFile.open(savePath);
-      if (result.type != ResultType.done && mounted) {
+      if (result.type == ResultType.done) {
+        // Remember that this exact version's installer was launched, so
+        // a repeat "Update" tap right away doesn't trigger another full
+        // download — see the check in checkForUpdate(). This only holds
+        // for kInstallLaunchedGracePeriod; if the install actually failed
+        // (e.g. a signing-key conflict) a later retry is allowed again.
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(kPrefLastInstallLaunchedVersion, version);
+        await prefs.setInt(
+            kPrefLastInstallLaunchedAtMs, DateTime.now().millisecondsSinceEpoch);
+      } else if (mounted) {
         _snack(
           'Download finished but the install screen could not open '
           'automatically (${result.message}). The file is saved at: '

@@ -1,5 +1,4 @@
-package com.example.my_test_app
-
+package com.sttechnology.schoolmanagement
 import io.flutter.embedding.android.FlutterActivity
 
 class MainActivity : FlutterActivity()

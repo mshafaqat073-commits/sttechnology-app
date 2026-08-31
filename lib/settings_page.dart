@@ -21,6 +21,8 @@ import 'school_branding.dart';
 import 'subscription_service.dart';
 import 'subscription_payment_page.dart';
 import 'reset_data_page.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'app_update_checker.dart';
 
 // Backup, Reset, and Import all share this one collection list so a
 // collection can never accidentally be left out of one of them.
@@ -1363,6 +1365,29 @@ class _SettingsPageState extends State<SettingsPage> {
                   "Reset everything at once, or reset one category at a time"),
               onTap: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const ResetDataPage()))),
+          const Divider(),
+          const ListTile(
+              title: Text("APP UPDATE",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, color: Colors.blue))),
+          FutureBuilder<String>(
+            future: PackageInfo.fromPlatform().then((p) => p.version),
+            builder: (context, snapshot) {
+              final installedVersion = snapshot.data;
+              return ListTile(
+                leading: const Icon(Icons.system_update_alt, color: Colors.teal),
+                title: const Text("App Version"),
+                subtitle: Text(installedVersion == null
+                    ? "Loading…"
+                    : "You have version $installedVersion installed"),
+                trailing: OutlinedButton(
+                  onPressed: () =>
+                      AppUpdateChecker.of(context)?.checkForUpdate(showResult: true),
+                  child: const Text("Check for Update"),
+                ),
+              );
+            },
+          ),
           const Divider(),
           ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),

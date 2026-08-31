@@ -199,6 +199,19 @@ DocumentReference<Map<String, dynamic>> schoolDoc() {
       .doc(SchoolContext.schoolId);
 }
 
+/// Whether [schoolId]'s account has been deactivated by the developer/
+/// Super Admin (the block/reactivate icon next to "Extend" in
+/// SuperAdminSubscriptionPage) — independent of subscription expiry
+/// (schools/{schoolId}.subscriptionStatus == 'deactivated'). Every login
+/// flow (Admin/Teacher/Parent) must check this BEFORE letting the user
+/// into the app — a deactivated school should never be able to log in,
+/// even if its subscriptionEndDate hasn't passed yet.
+Future<bool> isSchoolDeactivated(String schoolId) async {
+  final doc =
+      await FirebaseFirestore.instance.collection('schools').doc(schoolId).get();
+  return (doc.data()?['subscriptionStatus'] as String?) == 'deactivated';
+}
+
 /// Extracts the schoolId from the reference of any document under
 /// schools/{schoolId}/<collection>/<id>. Used at login time to find the
 /// schoolId of documents returned by a collectionGroup query (at that

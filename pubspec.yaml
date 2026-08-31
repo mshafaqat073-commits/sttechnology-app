@@ -45,6 +45,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  msix: ^3.16.7
 
 flutter:
   uses-material-design: true
@@ -53,3 +54,10 @@ flutter:
     - assets/st_technology_shafaqat_trust.png
     - assets/fonts/static/NotoNastaliqUrdu-Regular.ttf
     - assets/fonts/static/NotoNaskhArabic-Regular.ttf
+
+msix_config:
+  display_name: ST Education
+  publisher_display_name: ST Technology
+  identity_name: com.sttechnology.steducation
+  msix_version: 1.0.2.0
+  logo_path: assets/st_technology_shafaqat_trust.png

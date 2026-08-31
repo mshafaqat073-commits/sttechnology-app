@@ -20,6 +20,7 @@ import 'live_attendance_scanner_page.dart';
 import 'change_pin_dialog.dart';
 import 'teacher_performance_page.dart';
 import 'app_update_checker.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class TeacherDashboard extends StatelessWidget {
   final String staffDocId;
@@ -163,29 +164,38 @@ class TeacherDashboard extends StatelessWidget {
                   break;
               }
             },
-            itemBuilder: (context) => const [
+            itemBuilder: (context) => [
               PopupMenuItem(
                 value: 'update',
                 child: ListTile(
-                  leading: Icon(Icons.system_update_alt),
-                  title: Text("Check for Update"),
+                  leading: const Icon(Icons.system_update_alt),
+                  title: const Text("Check for Update"),
+                  subtitle: FutureBuilder<PackageInfo>(
+                    future: PackageInfo.fromPlatform(),
+                    builder: (context, snapshot) {
+                      final installedVersion = snapshot.data?.version;
+                      return Text(installedVersion == null
+                          ? "Loading version…"
+                          : "Installed version: $installedVersion");
+                    },
+                  ),
                 ),
               ),
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'pin',
                 child: ListTile(
                   leading: Icon(Icons.password),
                   title: Text("Change PIN"),
                 ),
               ),
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'ai',
                 child: ListTile(
                   leading: Icon(Icons.auto_awesome, color: Colors.orange),
                   title: Text("AI Assistant"),
                 ),
               ),
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'logout',
                 child: ListTile(
                   leading: Icon(Icons.logout, color: Colors.red),

@@ -66,7 +66,21 @@ class _TeacherLoginPageState extends State<TeacherLoginPage> {
 
       // Find out which school this doc belongs to, and set it as the
       // active school for the whole app.
-      SchoolContext.set(schoolIdFromDoc(matchedDoc.reference));
+      final schoolId = schoolIdFromDoc(matchedDoc.reference);
+
+      // A deactivated school (blocked by the developer/Super Admin) must
+      // not be able to log in at all, even with a correct Login ID+PIN
+      // and even if its subscription hasn't expired yet.
+      if (await isSchoolDeactivated(schoolId)) {
+        setState(() {
+          _errorMessage =
+              "This school's account has been deactivated. Please contact the school/developer.";
+          _isLoading = false;
+        });
+        return;
+      }
+
+      SchoolContext.set(schoolId);
       await SchoolContext.loadBranding();
 
       // Anonymous account for the session (free, no SMS) — link the staff

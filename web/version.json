@@ -1,13 +1,13 @@
 {
   "android": {
     "latest_version": "1.0.2",
-    "download_url": "https://github.com/mshafaqat073-commits/sttechnology-app/releases/download/1.0.2/app-release.apk",
+    "download_url": "https://github.com/mshafaqat073-commits/sttechnology-app/releases/download/1.0.2/app-debug.apk",
     "notes": "Bug fixes aur performance improvements.",
     "force_update": false
   },
   "windows": {
     "latest_version": "1.0.2",
-    "download_url": "https://github.com/mshafaqat073-commits/sttechnology-app/releases/download/1.0.2/steducation.exe",
+    "download_url": "https://github.com/mshafaqat073-commits/sttechnology-app/releases/download/1.0.2/aep_school_system.msix",
     "notes": "Bug fixes aur performance improvements.",
     "force_update": false
   }
