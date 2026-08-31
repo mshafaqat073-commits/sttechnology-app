@@ -8,7 +8,7 @@
 // has to tap "Install".
 //
 // Does nothing on web — web always serves the latest deploy from
-// Netlify.
+// Firebase Hosting.
 //
 // UPDATED BEHAVIOUR:
 // - An automatic check (on app start / on resume) only pops the
@@ -78,8 +78,8 @@
 //    button doesn't feel like it's doing nothing.
 //
 // ==========================================================================
-// For every new release, only version.json on Netlify needs updating —
-// no code changes required.
+// For every new release, only version.json on Firebase Hosting needs
+// updating — no code changes required.
 // ==========================================================================
 
 import 'dart:async';
@@ -96,9 +96,9 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// URL of the version.json file hosted on Netlify.
+/// URL of the version.json file hosted on Firebase Hosting.
 const String kVersionCheckUrl =
-    'https://sttechnology.netlify.app/version.json';
+    'https://steducation.web.app/version.json';
 
 /// How long to wait before re-showing the "Update Available" dialog to a
 /// user who already saw it for the current latest version and chose
@@ -250,7 +250,7 @@ class AppUpdateCheckerState extends State<AppUpdateChecker>
       final currentVersion = info.version; // e.g. "1.4.2"
       debugPrint('[UpdateChecker] Installed app version: $currentVersion');
 
-      // Cache-busting query param + no-cache headers: Netlify's CDN can
+      // Cache-busting query param + no-cache headers: Firebase Hosting's CDN can
       // keep serving an old cached copy of version.json for a while after
       // a new one is deployed. Without this, a device can compare the
       // freshly-installed app against a stale response and be told an
