@@ -18,6 +18,15 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Generate secrets.dart from GitHub Secrets
+        run: |
+          cat > lib/secrets.dart << EOF
+          const String groqApiKey = "${{ secrets.GROQ_API_KEY }}";
+          const String openRouterApiKey = "${{ secrets.OPENROUTER_API_KEY }}";
+          const String notificationEndpoint = "${{ secrets.NOTIFICATION_ENDPOINT }}";
+          const String notificationSharedSecret = "${{ secrets.NOTIFICATION_SHARED_SECRET }}";
+          EOF
+
       - name: Build web app
         run: flutter build web --release
 
